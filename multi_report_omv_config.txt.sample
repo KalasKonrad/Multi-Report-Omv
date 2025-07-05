@@ -1,0 +1,113 @@
+#!/bin/bash
+# Multi-Report OMV Configuration File - Sample
+# Copy this file to 'multi_report_omv_config.txt' and customize as needed
+# Lines starting with # are comments and will be ignored
+
+###### Temperature Monitoring Settings ######
+# Temperature thresholds for different drive types (in Celsius)
+# These are used when SCT temperature data is not available or disabled
+
+# HDD Temperature Settings
+Drive_Temp_Warn=45              # Warning threshold for traditional HDDs
+Drive_Temp_Critical=50          # Critical threshold for traditional HDDs
+
+# SSD Temperature Settings  
+SSD_Temp_Warn=50               # Warning threshold for SATA SSDs
+SSD_Temp_Critical=60           # Critical threshold for SATA SSDs
+
+# NVMe Temperature Settings
+NVMe_Temp_Warn=60              # Warning threshold for NVMe SSDs
+NVMe_Temp_Critical=70          # Critical threshold for NVMe SSDs
+
+###### SCT Temperature Data Settings ######
+# Use manufacturer temperature limits from SMART SCT data when available
+Use_SCT_Temperature_Data=true   # true/false - Use SCT data for more accurate limits
+
+# Warning deltas (only used when SCT data is available)
+# These create warning thresholds below the manufacturer's critical limits
+Drive_Temp_Warning_Delta=10     # HDD: Warn when within 10°C of SCT limit
+SSD_Temp_Warning_Delta=10       # SSD: Warn when within 10°C of SCT limit  
+NVMe_Temp_Warning_Delta=15      # NVMe: Warn when within 15°C of SCT limit
+
+###### SMR Drive Detection Settings ######
+# Detect Shingled Magnetic Recording (SMR) drives which are not ideal for RAID/ZFS
+SMR_Enable=true                 # true/false - Enable SMR drive detection
+SMR_Update=true                 # true/false - Update SMR database automatically
+SMR_Ignore_Alarm=false          # true/false - Suppress SMR warnings (monitoring only)
+
+###### Statistical Data Recording Settings ######
+# CSV file for historical drive data collection
+SDF_DataRecordEnable=true       # true/false - Enable CSV data recording
+Statistical_Data_File="$SCRIPT_DIR/statisticalsmartdata_omv.csv"  # CSV file path
+SDF_DataPurgeDays=730           # Days to keep historical data (730 = 2 years)
+
+###### CSV File Ownership Settings ######
+# Set ownership and permissions for the CSV file
+CSV_File_Owner=""               # User owner (blank = root)
+CSV_File_Group=""               # Group owner (blank = root) 
+CSV_File_Permissions="644"      # File permissions (644 = rw-r--r--)
+
+###### Email Notification Settings ######
+# Configure email alerts for drive issues
+Email_Enable=true               # true/false - Enable email notifications
+Email_To=""                     # Recipient email address (required if Email_Enable=true)
+Email_From=""                   # Sender email address (optional)
+Email_Subject_Prefix="[Multi-Report]"  # Email subject prefix
+Email_Include_Hostname=true     # true/false - Include hostname in subject
+Email_Use_HTML=false            # true/false - Send HTML formatted emails
+Email_Attach_Logs=false         # true/false - Attach log files to emails
+Email_Attach_CSV=false          # true/false - Attach CSV data to emails
+Email_Level="issues"            # When to send emails: "always", "issues", "errors", "never"
+
+###### SMART Testing Settings ######
+# Integration with drive_selftest_omv.sh for automated SMART testing
+# Mode 3 = Disabled, Mode 1 = Enabled with various options
+
+# Short SMART Test Configuration
+Short_Test_Mode=3               # 3=Disabled, 1=Enabled
+Short_SMART_Testing_Order="DriveID"        # Sorting: "DriveID", "Serial", "Size"
+Short_Drives_to_Test_Per_Day=2             # Number of drives to test per day
+Short_Drives_Test_Period="Week"            # Period: "Week", "Month", "Quarter"
+Short_Drives_Tested_Days_of_the_Week="1,2,3,4,5"  # Days: 1=Mon, 7=Sun
+Short_Time_Delay_Between_Drives=60         # Seconds between tests
+
+# Long SMART Test Configuration  
+Long_Test_Mode=3                # 3=Disabled, 1=Enabled
+Long_SMART_Testing_Order="Serial"         # Sorting: "DriveID", "Serial", "Size"
+Long_Drives_to_Test_Per_Day=1             # Number of drives to test per day
+Long_Drives_Test_Period="Month"           # Period: "Week", "Month", "Quarter"
+Long_Drives_Tested_Days_of_the_Week="6,7" # Days: 1=Mon, 7=Sun (weekends)
+Long_Time_Delay_Between_Drives=120        # Seconds between tests
+
+# Additional SMART Test Options
+Test_ONLY_NVMe_Drives="false"   # true/false - Test only NVMe drives
+Ignore_Drives_List=""           # Comma-separated list of drives to ignore (e.g., "sda,sdb")
+
+###### Configuration Notes ######
+# 1. Temperature settings: Lower values = more sensitive monitoring
+# 2. SCT data provides manufacturer-specific temperature limits (recommended)
+# 3. SMR drives are not recommended for ZFS, RAID, or heavy random writes
+# 4. CSV data helps track drive health trends over time
+# 5. Email notifications require proper system mail configuration
+# 6. SMART testing should be scheduled when system load is low
+# 7. Long tests can take several hours - schedule accordingly
+# 8. Test modes can be enabled independently (short only, long only, or both)
+
+###### Example Email Configuration ######
+# For Gmail SMTP (requires app password):
+# Email_To="admin@yourdomain.com"
+# Email_From="omv-alerts@yourdomain.com"
+
+###### Example Test Schedule ######
+# Conservative schedule (enabled example):
+# Short_Test_Mode=1
+# Short_Drives_Tested_Days_of_the_Week="2,4"  # Tuesday, Thursday
+# Long_Test_Mode=1  
+# Long_Drives_Tested_Days_of_the_Week="7"     # Sunday only
+
+###### Troubleshooting ######
+# - Check file permissions: chmod 644 multi_report_omv_config.txt
+# - Verify syntax: No spaces around = signs
+# - Quote string values that contain spaces or special characters
+# - Use full paths for file locations
+# - Test email settings with a simple test first
