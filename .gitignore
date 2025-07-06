@@ -1,0 +1,52 @@
+# Multi-Report OMV Fork - Git Ignore File
+# Personal configuration files (users should copy from .sample)
+multi_report_omv_config.txt
+
+# CSV data files and logs (contain personal system data)
+statisticalsmartdata_omv.csv
+*.csv
+
+# Log files and test results
+DS_Logs/
+*.log
+*.txt
+
+# Temporary files
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Personal scripts and test files
+test_*
+temp_*
+
+# Email configuration (may contain sensitive info)
+email_config.txt
+
+# Personal workspace settings (can contain local paths)
+*.code-workspace
