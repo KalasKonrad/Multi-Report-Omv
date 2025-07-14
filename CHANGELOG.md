@@ -11,5 +11,13 @@
 ### Improved
 - More reliable notification delivery for OMV health and SMART reports
 
+## [v1.2.0] - 2025-07-05
+### Added
+- Initial public release of Multi-Report OMV Fork v1.2
+- OMV health and SMART monitoring with email notifications
+- CSV logging of drive statistics
+- SMR drive detection and reporting
+- Configurable email, logging, and test scheduling
+- Compatibility with OMV 6.x/7.x and SnapRAID manager integration
+
 ---
-See previous releases for earlier changes.
