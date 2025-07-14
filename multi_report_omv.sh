@@ -1520,11 +1520,14 @@ create_email_headers() {
     local to="$1"
     local from="$2"
     local subject="$3"
-    local content_type="${4:-text/plain; charset=utf-8}"
-    
+    local content_type
+    if [ "$Email_Use_HTML" = "true" ]; then
+        content_type="text/html; charset=UTF-8"
+    else
+        content_type="text/plain; charset=UTF-8"
+    fi
     local message_id=$(generate_message_id)
     local date=$(get_email_timestamp)
-    
     echo "From: $from"
     echo "To: $to"
     echo "Subject: $subject"
@@ -1541,30 +1544,28 @@ send_mail_transport() {
     local email_content="$1"
     local to="$2"
     local attach_file="$3"
-    
+    local subject="$4"
+    local mode="${5:-plain}"
     echo "Sending email using mail transport to: $to"
-    
-    # Extract subject and body for plain text emails
-    local subject=$(echo "$email_content" | grep -m 1 "^Subject: " | sed 's/^Subject: //')
-    
-    # Extract body (everything after the first blank line)
     local temp_body=$(mktemp)
-    echo "$email_content" | awk '/^$/{p=1;next} p{print}' > "$temp_body"
-    
-    # Handle attachments
+    local mail_args=""
+    if [ "$mode" = "html" ]; then
+        printf "%s" "$email_content" > "$temp_body"
+        mail_args="-s \"$subject\" -a 'Content-Type: text/html; charset=UTF-8'"
+    else
+        # For plain, extract subject and body
+        subject=$(echo "$email_content" | grep -m 1 "^Subject: " | sed 's/^Subject: //')
+        echo "$email_content" | awk '/^$/{p=1;next} p{print}' > "$temp_body"
+        mail_args="-s \"$subject\" -a 'Content-Type: text/plain; charset=UTF-8'"
+    fi
     if [ -n "$attach_file" ] && [ -f "$attach_file" ]; then
         echo "Attaching file: $attach_file"
-        # Use mail with attachment (mailutils supports -A flag)
-        mail -s "$subject" -A "$attach_file" "$to" < "$temp_body"
-        local result=$?
-    else
-        # Regular plain text email
-        mail -s "$subject" "$to" < "$temp_body"
-        local result=$?
+        mail_args="$mail_args -A \"$attach_file\""
     fi
-    
+    # shellcheck disable=SC2086
+    eval mail $mail_args "$to" < "$temp_body"
+    local result=$?
     rm -f "$temp_body"
-    
     # Report results
     if [ $result -eq 0 ]; then
         echo "Email sent successfully via transport"
@@ -1609,10 +1610,17 @@ send_email() {
     fi
     full_subject="$full_subject $subject"
     
-    # Create plain text email
-    local email_content=""
-    email_content=$(create_email_headers "$email_to" "$email_from" "$full_subject")
-    email_content+="$message"
+    # Prepare email body and headers
+    local email_body=""
+    local email_headers=""
+    if [ "$Email_Use_HTML" = "true" ]; then
+        # Only the body, with <br> for newlines
+        email_body=$(printf "%s" "$message" | sed ':a;N;$!ba;s/\n/<br>\n/g')
+    else
+        # For plain text, include headers in the body
+        email_headers=$(create_email_headers "$email_to" "$email_from" "$full_subject")
+        email_body="$email_headers$message"
+    fi
     
     # Determine attachments
     local attachments=""
@@ -1634,7 +1642,11 @@ send_email() {
     fi
     
     # Send email using mail transport
-    send_mail_transport "$email_content" "$email_to" "$attachments"
+    if [ "$Email_Use_HTML" = "true" ]; then
+        send_mail_transport "$email_body" "$email_to" "$attachments" "$full_subject" "html"
+    else
+        send_mail_transport "$email_body" "$email_to" "$attachments" "" "plain"
+    fi
     local result=$?
     
     # Report results
