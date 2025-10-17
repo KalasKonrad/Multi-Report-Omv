@@ -12,7 +12,175 @@ export MAIN_SCRIPT_PID=$$
 SCRIPT_PATH="$(readlink -f "$0")"
 BASE_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")"
 
-# Installation type and paths
+# Environment file path
+ENV_FILE="$BASE_DIR/.env"
+
+# Installation log file (stays in script directory)
+INSTALL_LOG="$BASE_DIR/installation.log"
+
+# Function to log installation events
+log_install() {
+    local message="$*"
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    echo "[$timestamp] $message" >> "$INSTALL_LOG"
+}
+
+# Function to prompt for installation type on first run
+first_run_setup() {
+    # Start installation log
+    echo "==========================================" >> "$INSTALL_LOG"
+    log_install "First Run Setup Started"
+    log_install "Script location: $BASE_DIR"
+    log_install "User: $(whoami)"
+    log_install "Hostname: $(hostname)"
+    echo "==========================================" >> "$INSTALL_LOG"
+    
+    echo "Multi-Report-OMV - First Run Setup"
+    echo "==================================="
+    echo
+    echo "This appears to be your first time running Multi-Report-OMV."
+    echo "Please choose where you'd like to store configuration and logs:"
+    echo
+    echo "1) System-wide installation (/etc/multi-report-omv, /var/log/multi-report-omv)"
+    echo "   Requires root privileges, available to all users"
+    echo
+    echo "2) User installation (~/.config/multi-report-omv, ~/.local/share/multi-report-omv/logs)"
+    echo "   User-specific settings, no root required"
+    echo
+    echo "3) Local installation (current directory)"
+    echo "   Portable, contained within the script directory"
+    echo
+
+    # Default to local installation if running non-interactively
+    if [ ! -t 0 ]; then
+        echo "Non-interactive shell detected, defaulting to local installation."
+        log_install "Non-interactive mode detected"
+        INSTALLATION_TYPE="local"
+        CONFIG_BASE="$BASE_DIR/config"
+        LOG_BASE="$BASE_DIR/logs"
+        TMP_BASE="$BASE_DIR/tmp"
+    else
+        # Prompt for installation type
+        local choice
+        while true; do
+            read -p "Select installation type [1-3]: " choice
+            case "$choice" in
+                1)
+                    INSTALLATION_TYPE="system"
+                    CONFIG_BASE="/etc/multi-report-omv"
+                    LOG_BASE="/var/log/multi-report-omv"
+                    TMP_BASE="/tmp/multi-report-omv"
+                    log_install "User selected: System-wide installation"
+                    break
+                    ;;
+                2)
+                    INSTALLATION_TYPE="user"
+                    CONFIG_BASE="$HOME/.config/multi-report-omv"
+                    LOG_BASE="$HOME/.local/share/multi-report-omv/logs"
+                    TMP_BASE="$HOME/.local/share/multi-report-omv/tmp"
+                    log_install "User selected: User installation"
+                    break
+                    ;;
+                3)
+                    INSTALLATION_TYPE="local"
+                    CONFIG_BASE="$BASE_DIR/config"
+                    LOG_BASE="$BASE_DIR/logs"
+                    TMP_BASE="$BASE_DIR/tmp"
+                    log_install "User selected: Local installation"
+                    break
+                    ;;
+                *)
+                    echo "Invalid choice. Please select 1, 2, or 3."
+                    ;;
+            esac
+        done
+    fi
+
+    # Confirm selection
+    echo
+    echo "Selected: $INSTALLATION_TYPE installation"
+    echo "  Configuration will be stored in: $CONFIG_BASE"
+    echo "  Logs will be stored in: $LOG_BASE"
+    echo "  Temporary files will be stored in: $TMP_BASE"
+    echo
+    
+    log_install "Configuration directory: $CONFIG_BASE"
+    log_install "Log directory: $LOG_BASE"
+    log_install "Temp directory: $TMP_BASE"
+
+    # Create directories
+    if [ "$INSTALLATION_TYPE" = "system" ]; then
+        if ! sudo mkdir -p "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE" 2>/dev/null; then
+            echo "ERROR: Failed to create system directories. Do you have sudo privileges?"
+            log_install "ERROR: Failed to create system directories"
+            exit 1
+        fi
+        sudo chmod 755 "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE"
+        log_install "System directories created with sudo"
+    else
+        mkdir -p "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE"
+        log_install "Directories created successfully"
+    fi
+
+    # Write environment file for future runs
+    cat > "$ENV_FILE" << EOF
+# Multi-Report-OMV Environment Configuration
+# Generated on $(date)
+# DO NOT EDIT MANUALLY
+
+INSTALLATION_TYPE="$INSTALLATION_TYPE"
+CONFIG_BASE="$CONFIG_BASE"
+LOG_BASE="$LOG_BASE"
+TMP_BASE="$TMP_BASE"
+EOF
+
+    echo "Installation preferences saved to: $ENV_FILE"
+    log_install "Environment file created: $ENV_FILE"
+    echo ""
+
+    # Create symlinks if needed
+    if [ "$INSTALLATION_TYPE" = "system" ]; then
+        echo "Creating system command symlink..."
+        if sudo ln -sf "$BASE_DIR/bin/multi-report-omv" "/usr/local/bin/multi-report-omv" 2>/dev/null; then
+            echo "✓ Symlink created: /usr/local/bin/multi-report-omv"
+            echo "  You can now run: multi-report-omv"
+            log_install "System symlink created: /usr/local/bin/multi-report-omv"
+        else
+            echo "⚠ Failed to create symlink (may not have permissions)"
+            log_install "WARNING: Failed to create system symlink"
+        fi
+    elif [ "$INSTALLATION_TYPE" = "user" ]; then
+        echo "Creating user command symlink..."
+        mkdir -p "$HOME/.local/bin"
+        if ln -sf "$BASE_DIR/bin/multi-report-omv" "$HOME/.local/bin/multi-report-omv" 2>/dev/null; then
+            echo "✓ Symlink created: ~/.local/bin/multi-report-omv"
+            echo "  Ensure ~/.local/bin is in your PATH"
+            echo "  You can now run: multi-report-omv"
+            log_install "User symlink created: ~/.local/bin/multi-report-omv"
+        else
+            echo "⚠ Failed to create symlink"
+            log_install "WARNING: Failed to create user symlink"
+        fi
+    else
+        log_install "Local installation - no symlink created"
+    fi
+
+    echo
+    echo "Setup complete. Continuing with execution..."
+    log_install "First run setup completed successfully"
+    log_install "=========================================="
+    echo
+}
+
+# Check if this is the first run
+if [ ! -f "$ENV_FILE" ]; then
+    first_run_setup
+else
+    # Load environment configuration
+    source "$ENV_FILE"
+fi
+
+# Ensure we have paths set regardless of how we got here
 : "${INSTALLATION_TYPE:=local}"
 : "${CONFIG_BASE:=$BASE_DIR/config}"
 : "${LOG_BASE:=$BASE_DIR/logs}"
@@ -29,6 +197,9 @@ export INSTALLATION_TYPE
 source "${BASE_DIR}/core/logger.sh"
 source "${BASE_DIR}/core/utils.sh"
 source "${BASE_DIR}/core/config.sh"
+
+# Note: Logging initialization is delayed until we know we need it
+# This prevents creating empty log files for simple commands like --help or --version
 
 # Check if root is required (AFTER modules loaded)
 if [ "$(get_config "REQUIRE_ROOT" "false")" = "true" ] && ! is_root; then
@@ -68,21 +239,381 @@ APP_NAME="Multi-Report-OMV"
 APP_VERSION=$(get_version 2>/dev/null || echo "Unknown Version")
 
 # -------------------------------------------------------
+# INSTALLATION MANAGEMENT
+# -------------------------------------------------------
+
+# Function to uninstall Multi-Report-OMV
+uninstall_multi_report() {
+    echo "Multi-Report-OMV - Uninstall"
+    echo "============================"
+    
+    # Load environment file if it exists
+    local current_type="local"
+    local config_path="$BASE_DIR/config"
+    local log_path="$BASE_DIR/logs"
+    
+    if [ -f "$ENV_FILE" ]; then
+        source "$ENV_FILE"
+        current_type="$INSTALLATION_TYPE"
+        config_path="${CONFIG_BASE:-$config_path}"
+        log_path="${LOG_BASE:-$log_path}"
+    fi
+    
+    echo "Current installation type: $current_type"
+    echo "Configuration directory: $config_path"
+    echo "Log directory: $log_path"
+    echo
+    
+    # Ask what to remove
+    echo "What would you like to remove?"
+    echo "1) Installation preferences only (keep configuration and logs)"
+    echo "2) Everything (complete removal including configuration and logs)"
+    echo
+    
+    local remove_choice
+    local remove_all=false
+    
+    while true; do
+        read -p "Select option [1-2]: " remove_choice
+        case "$remove_choice" in
+            1)
+                remove_all=false
+                break
+                ;;
+            2)
+                remove_all=true
+                break
+                ;;
+            *)
+                echo "Invalid choice. Please select 1 or 2."
+                ;;
+        esac
+    done
+    
+    echo
+    if [ "$remove_all" = true ]; then
+        echo "Will remove ALL data including configuration and logs."
+    else
+        echo "Will remove only installation preferences, keeping configuration and logs."
+    fi
+    echo
+    
+    # Confirm uninstall
+    read -p "Are you sure you want to continue? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy] ]]; then
+        echo "Uninstall cancelled."
+        exit 0
+    fi
+    
+    # Remove symlinks if they exist
+    case "$current_type" in
+        "system")
+            if [ -L "/usr/local/bin/multi-report-omv" ]; then
+                echo "Removing system symlink"
+                sudo rm -f "/usr/local/bin/multi-report-omv"
+            fi
+            ;;
+        "user")
+            if [ -L "$HOME/.local/bin/multi-report-omv" ]; then
+                echo "Removing user symlink"
+                rm -f "$HOME/.local/bin/multi-report-omv"
+            fi
+            ;;
+    esac
+    
+    # Remove configuration and logs if remove_all is true
+    if [ "$remove_all" = true ]; then
+        if [ -d "$config_path" ]; then
+            echo "Removing configuration directory: $config_path"
+            if [ "$current_type" = "system" ]; then
+                sudo rm -rf "$config_path"
+            else
+                rm -rf "$config_path"
+            fi
+        fi
+        
+        if [ -d "$log_path" ]; then
+            echo "Removing log directory: $log_path"
+            if [ "$current_type" = "system" ]; then
+                sudo rm -rf "$log_path"
+            else
+                rm -rf "$log_path"
+            fi
+        fi
+        
+        echo "All data has been removed."
+    fi
+    
+    # Always remove the .env file
+    if [ -f "$ENV_FILE" ]; then
+        echo "Removing environment file"
+        rm -f "$ENV_FILE"
+    fi
+    
+    echo
+    echo "Uninstall complete."
+    echo
+    echo "To reinstall, run: $BASE_DIR/bin/multi-report-omv"
+    
+    exit 0
+}
+
+# Function to reinstall Multi-Report-OMV
+reinstall_multi_report() {
+    # Log reinstall start
+    echo "==========================================" >> "$INSTALL_LOG"
+    log_install "Reinstall Started"
+    log_install "User: $(whoami)"
+    log_install "Hostname: $(hostname)"
+    
+    echo "Multi-Report-OMV - Reinstall"
+    echo "============================"
+    
+    # Load current installation info if available
+    local old_type="local"
+    local old_config_path="$BASE_DIR/config"
+    local old_log_path="$BASE_DIR/logs"
+    local old_tmp_path="$BASE_DIR/tmp"
+    
+    if [ -f "$ENV_FILE" ]; then
+        source "$ENV_FILE"
+        old_type="$INSTALLATION_TYPE"
+        old_config_path="${CONFIG_BASE:-$old_config_path}"
+        old_log_path="${LOG_BASE:-$old_log_path}"
+        old_tmp_path="${TMP_BASE:-$old_tmp_path}"
+    fi
+    
+    log_install "Current installation type: $old_type"
+    log_install "Current config: $old_config_path"
+    log_install "Current logs: $old_log_path"
+    
+    echo "Current installation type: $old_type"
+    echo "Current configuration: $old_config_path"
+    echo "Current logs: $old_log_path"
+    echo "Current temp directory: $old_tmp_path"
+    echo
+    
+    # Ask if user wants to keep data
+    local keep_data=true
+    read -p "Do you want to migrate your existing configuration and logs? [Y/n]: " migrate_choice
+    if [[ "$migrate_choice" =~ ^[Nn] ]]; then
+        keep_data=false
+        echo "Will perform a fresh installation without migrating data."
+    else
+        echo "Will migrate existing configuration and logs to the new location."
+    fi
+    echo
+    
+    # Choose new installation type
+    echo "Please choose a new installation type:"
+    echo "1) System-wide installation (/etc/multi-report-omv, /var/log/multi-report-omv)"
+    echo "   Requires root privileges, available to all users"
+    echo
+    echo "2) User installation (~/.config/multi-report-omv, ~/.local/share/multi-report-omv)"
+    echo "   User-specific settings, no root required"
+    echo
+    echo "3) Local installation (current directory)"
+    echo "   Portable, contained within the script directory"
+    echo
+    
+    local choice
+    while true; do
+        read -p "Select installation type [1-3]: " choice
+        case "$choice" in
+            1)
+                INSTALLATION_TYPE="system"
+                CONFIG_BASE="/etc/multi-report-omv"
+                LOG_BASE="/var/log/multi-report-omv"
+                TMP_BASE="/tmp/multi-report-omv"
+                break
+                ;;
+            2)
+                INSTALLATION_TYPE="user"
+                CONFIG_BASE="$HOME/.config/multi-report-omv"
+                LOG_BASE="$HOME/.local/share/multi-report-omv/logs"
+                TMP_BASE="$HOME/.local/share/multi-report-omv/tmp"
+                break
+                ;;
+            3)
+                INSTALLATION_TYPE="local"
+                CONFIG_BASE="$BASE_DIR/config"
+                LOG_BASE="$BASE_DIR/logs"
+                TMP_BASE="$BASE_DIR/tmp"
+                break
+                ;;
+            *)
+                echo "Invalid choice. Please select 1, 2, or 3."
+                ;;
+        esac
+    done
+    
+    # Confirm selection
+    echo
+    echo "New installation type: $INSTALLATION_TYPE"
+    echo "New configuration path: $CONFIG_BASE"
+    echo "New log path: $LOG_BASE"
+    echo
+    
+    if [ "$keep_data" = true ] && [ -d "$old_config_path" ]; then
+        echo "Will migrate existing configuration and logs."
+    fi
+    
+    read -p "Continue with reinstallation? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy] ]]; then
+        echo "Reinstall cancelled."
+        exit 0
+    fi
+    
+    # Create automatic backup before reinstall
+    if [ -f "$old_config_path/multi-report-omv.conf" ]; then
+        echo
+        echo "Creating automatic backup before reinstall..."
+        # Source config module temporarily with old paths
+        local saved_config_base="$CONFIG_BASE"
+        CONFIG_BASE="$old_config_path"
+        
+        # Initialize logging temporarily
+        source "${BASE_DIR}/core/logger.sh"
+        init_logging 2>/dev/null || true
+        
+        # Create backup
+        source "${BASE_DIR}/core/config.sh"
+        backup_config "pre-reinstall backup" 2>/dev/null || echo "Note: Could not create backup (may not be critical)"
+        
+        CONFIG_BASE="$saved_config_base"
+    fi
+    
+    # Create new directories
+    if [ "$INSTALLATION_TYPE" = "system" ]; then
+        sudo mkdir -p "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE"
+        sudo chmod 755 "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE"
+    else
+        mkdir -p "$CONFIG_BASE" "$LOG_BASE" "$TMP_BASE"
+    fi
+    
+    # Migrate configuration files
+    if [ "$keep_data" = true ] && [ -d "$old_config_path" ] && [ "$old_config_path" != "$CONFIG_BASE" ]; then
+        echo "Migrating configuration from $old_config_path to $CONFIG_BASE"
+        if [ "$INSTALLATION_TYPE" = "system" ]; then
+            sudo cp -r "$old_config_path"/* "$CONFIG_BASE"/ 2>/dev/null || true
+        else
+            cp -r "$old_config_path"/* "$CONFIG_BASE"/ 2>/dev/null || true
+        fi
+    fi
+    
+    # Migrate log files
+    if [ "$keep_data" = true ] && [ -d "$old_log_path" ] && [ "$old_log_path" != "$LOG_BASE" ]; then
+        echo "Migrating logs from $old_log_path to $LOG_BASE"
+        if [ "$INSTALLATION_TYPE" = "system" ]; then
+            sudo cp -r "$old_log_path"/* "$LOG_BASE"/ 2>/dev/null || true
+        else
+            cp -r "$old_log_path"/* "$LOG_BASE"/ 2>/dev/null || true
+        fi
+    fi
+    
+    # Write new environment file
+    cat > "$ENV_FILE" << EOF
+# Multi-Report-OMV Environment Configuration
+# Generated on $(date)
+# DO NOT EDIT MANUALLY
+
+INSTALLATION_TYPE="$INSTALLATION_TYPE"
+CONFIG_BASE="$CONFIG_BASE"
+LOG_BASE="$LOG_BASE"
+TMP_BASE="$TMP_BASE"
+EOF
+    
+    # Create symlinks if needed
+    if [ "$INSTALLATION_TYPE" = "system" ]; then
+        echo "Creating system command symlink"
+        sudo ln -sf "$BASE_DIR/bin/multi-report-omv" "/usr/local/bin/multi-report-omv"
+        echo "✓ You can now run: multi-report-omv"
+    elif [ "$INSTALLATION_TYPE" = "user" ]; then
+        echo "Creating user command symlink"
+        mkdir -p "$HOME/.local/bin"
+        ln -sf "$BASE_DIR/bin/multi-report-omv" "$HOME/.local/bin/multi-report-omv"
+        echo "✓ You can now run: multi-report-omv"
+        echo "  Ensure ~/.local/bin is in your PATH"
+    fi
+    
+    # Remove old symlinks if type changed
+    if [ "$old_type" != "$INSTALLATION_TYPE" ]; then
+        case "$old_type" in
+            "system")
+                if [ -L "/usr/local/bin/multi-report-omv" ]; then
+                    echo "Removing old system symlink"
+                    sudo rm -f "/usr/local/bin/multi-report-omv"
+                fi
+                ;;
+            "user")
+                if [ -L "$HOME/.local/bin/multi-report-omv" ]; then
+                    echo "Removing old user symlink"
+                    rm -f "$HOME/.local/bin/multi-report-omv"
+                fi
+                ;;
+        esac
+    fi
+    
+    echo
+    echo "Reinstall complete."
+    echo
+    echo "To run Multi-Report-OMV, use: multi-report-omv (if symlinked) or $BASE_DIR/bin/multi-report-omv"
+    
+    exit 0
+}
+
+# -------------------------------------------------------
 # HELP AND VERSION
 # -------------------------------------------------------
 
 show_version() {
+    local simple=false
+    if [ "$1" = "--simple" ] || [ "$1" = "-s" ]; then
+        simple=true
+    fi
+    
     echo "${APP_NAME} v${APP_VERSION}"
     echo "SMART monitoring and reporting for OpenMediaVault"
-    echo ""
-    echo "Build Information:"
-    if command -v git >/dev/null 2>&1 && [ -d "${BASE_DIR}/.git" ]; then
-        local git_hash=$(git -C "${BASE_DIR}" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        local git_branch=$(git -C "${BASE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-        echo "  Git: $git_branch @ $git_hash"
+    
+    if [ "$simple" = false ]; then
+        echo ""
+        echo "Build Information:"
+        # Check for git in BASE_DIR or parent directory (project root)
+        local git_dir=""
+        if [ -d "${BASE_DIR}/.git" ]; then
+            git_dir="${BASE_DIR}"
+        elif [ -d "$(dirname "${BASE_DIR}")/.git" ]; then
+            git_dir="$(dirname "${BASE_DIR}")"
+        fi
+        
+        if command -v git >/dev/null 2>&1 && [ -n "$git_dir" ]; then
+            local git_hash=$(git -C "$git_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+            local git_branch=$(git -C "$git_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+            local git_date=$(git -C "$git_dir" log -1 --format=%ci 2>/dev/null || echo "unknown")
+            echo "  Commit: ${git_hash}"
+            echo "  Branch: ${git_branch}"
+            echo "  Date: ${git_date}"
+        else
+            echo "  Git info: not available"
+        fi
+        
+        echo ""
+        echo "Installation:"
+        echo "  Type: ${INSTALLATION_TYPE:-unknown}"
+        echo "  Location: ${BASE_DIR}"
+        echo "  Config: ${CONFIG_BASE:-unknown}"
+        echo "  Logs: ${LOG_BASE:-unknown}"
+        echo "  Temp: ${TMP_BASE:-unknown}"
+        
+        # Show symlink status
+        if [ "$INSTALLATION_TYPE" = "system" ] && [ -L "/usr/local/bin/multi-report-omv" ]; then
+            echo "  Command: multi-report-omv (system-wide)"
+        elif [ "$INSTALLATION_TYPE" = "user" ] && [ -L "$HOME/.local/bin/multi-report-omv" ]; then
+            echo "  Command: multi-report-omv (user)"
+        else
+            echo "  Command: $BASE_DIR/bin/multi-report-omv"
+        fi
     fi
-    echo "  Base Directory: $BASE_DIR"
-    echo "  Installation Type: $INSTALLATION_TYPE"
 }
 
 show_help() {
@@ -95,6 +626,10 @@ show_help() {
     echo "  test             Run drive self-tests"
     echo "  report           Generate comprehensive report"
     echo "  config           Manage configuration (show, backup, restore, list-backups, clean)"
+    echo ""
+    echo "Installation Management:"
+    echo "  --reinstall      Change installation type (system, user, or local)"
+    echo "  --uninstall      Remove Multi-Report-OMV and optionally delete configuration"
     echo ""
     echo "Options:"
     echo "  --help, -h       Show this help message"
@@ -109,7 +644,14 @@ show_help() {
     echo "  $(basename "$0") config backup         # Backup configuration"
     echo "  $(basename "$0") config list-backups   # List backups"
     echo "  $(basename "$0") config restore        # Restore from backup"
+    echo "  $(basename "$0") --reinstall           # Change installation type"
+    echo "  $(basename "$0") --uninstall           # Remove installation"
     echo "  $(basename "$0") --debug status        # Debug mode"
+    echo ""
+    echo "Installation Types:"
+    echo "  • System-wide: /etc/multi-report-omv, /var/log/multi-report-omv (requires root)"
+    echo "  • User: ~/.config/multi-report-omv, ~/.local/share/multi-report-omv (no root)"
+    echo "  • Local: config/, logs/ in script directory (portable)"
     echo ""
     echo "For more information, see: ${BASE_DIR}/docs/README.md"
 }
@@ -398,6 +940,16 @@ check_and_elevate() {
 # -------------------------------------------------------
 
 main() {
+    # Handle special installation commands first (before initialization)
+    case "$1" in
+        --reinstall)
+            reinstall_multi_report
+            ;;
+        --uninstall)
+            uninstall_multi_report
+            ;;
+    esac
+    
     # Check if we need sudo elevation first
     check_and_elevate "$@"
     
@@ -435,6 +987,9 @@ main() {
                 ;;
         esac
     done
+    
+    # Initialize logging now (after we know it's not just --help or --version)
+    init_logging
     
     # Enable debug if requested
     if [ "$debug" = true ]; then

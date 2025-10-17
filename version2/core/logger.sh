@@ -105,6 +105,30 @@ log() {
     fi
 }
 
+# Log only to file (no console output)
+log_file_only() {
+    local level="$1"
+    shift
+    local message="$*"
+    
+    # Check log level
+    local msg_level="${LOG_LEVELS[$level]:-1}"
+    if [ "$msg_level" -lt "$CURRENT_LOG_LEVEL" ]; then
+        return 0
+    fi
+    
+    # Format timestamp
+    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    
+    # Format level for display
+    local level_display=$(echo "$level" | tr '[:lower:]' '[:upper:]')
+    
+    # Write to log file only
+    if [ -n "$LOG_FILE" ]; then
+        echo "[$timestamp] [$level_display] $message" >> "$LOG_FILE"
+    fi
+}
+
 # Convenience functions
 log_debug() {
     log "debug" "$@"
