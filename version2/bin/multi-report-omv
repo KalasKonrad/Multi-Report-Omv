@@ -1,0 +1,476 @@
+#!/bin/bash
+# Multi-Report-OMV $(get_version 2>/dev/null || echo "Unknown Version")
+# Main executable
+
+# Prevent text wrapping in console output
+export COLUMNS=999
+
+# Record main script PID
+export MAIN_SCRIPT_PID=$$
+
+# Determine script location
+SCRIPT_PATH="$(readlink -f "$0")"
+BASE_DIR="$(dirname "$(dirname "$SCRIPT_PATH")")"
+
+# Installation type and paths
+: "${INSTALLATION_TYPE:=local}"
+: "${CONFIG_BASE:=$BASE_DIR/config}"
+: "${LOG_BASE:=$BASE_DIR/logs}"
+: "${TMP_BASE:=$BASE_DIR/tmp}"
+
+# Export variables for modules
+export BASE_DIR
+export CONFIG_BASE
+export LOG_BASE
+export TMP_BASE
+export INSTALLATION_TYPE
+
+# Import core modules
+source "${BASE_DIR}/core/logger.sh"
+source "${BASE_DIR}/core/utils.sh"
+source "${BASE_DIR}/core/config.sh"
+
+# Check if root is required (AFTER modules loaded)
+if [ "$(get_config "REQUIRE_ROOT" "false")" = "true" ] && ! is_root; then
+    echo "ERROR: This script must be run as root when REQUIRE_ROOT is enabled."
+    echo "Please run with sudo or as the root user."
+    exit 1
+fi
+
+# Define elevate_privileges function for use by commands
+elevate_privileges() {
+    # Skip if already root
+    if is_root; then
+        return 0
+    fi
+    
+    # Check if sudo is disabled
+    if [ "$(get_config "DISABLE_SUDO" "false")" = "true" ]; then
+        log_error "Root privileges required but sudo is disabled in configuration"
+        echo "ERROR: Root privileges required. Please run as root or enable sudo."
+        return 1
+    fi
+    
+    # Initialize sudo keepalive if not already done
+    if [ "${SUDO_PRIVILEGES_INITIALIZED:-false}" != "true" ]; then
+        init_sudo_privileges
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to obtain required privileges."
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# Application info
+APP_NAME="Multi-Report-OMV"
+APP_VERSION=$(get_version 2>/dev/null || echo "Unknown Version")
+
+# -------------------------------------------------------
+# HELP AND VERSION
+# -------------------------------------------------------
+
+show_version() {
+    echo "${APP_NAME} v${APP_VERSION}"
+    echo "SMART monitoring and reporting for OpenMediaVault"
+    echo ""
+    echo "Build Information:"
+    if command -v git >/dev/null 2>&1 && [ -d "${BASE_DIR}/.git" ]; then
+        local git_hash=$(git -C "${BASE_DIR}" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        local git_branch=$(git -C "${BASE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        echo "  Git: $git_branch @ $git_hash"
+    fi
+    echo "  Base Directory: $BASE_DIR"
+    echo "  Installation Type: $INSTALLATION_TYPE"
+}
+
+show_help() {
+    show_version
+    echo ""
+    echo "Usage: $(basename "$0") [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  status           Show system status and SMART drives"
+    echo "  test             Run drive self-tests"
+    echo "  report           Generate comprehensive report"
+    echo "  config           Manage configuration (show, backup, restore, list-backups, clean)"
+    echo ""
+    echo "Options:"
+    echo "  --help, -h       Show this help message"
+    echo "  --version, -v    Show version information"
+    echo "  --debug          Enable debug logging"
+    echo "  --config FILE    Use specific configuration file"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") status                # Show system status"
+    echo "  $(basename "$0") test                  # Run scheduled tests"
+    echo "  $(basename "$0") config show           # Show configuration"
+    echo "  $(basename "$0") config backup         # Backup configuration"
+    echo "  $(basename "$0") config list-backups   # List backups"
+    echo "  $(basename "$0") config restore        # Restore from backup"
+    echo "  $(basename "$0") --debug status        # Debug mode"
+    echo ""
+    echo "For more information, see: ${BASE_DIR}/docs/README.md"
+}
+
+# -------------------------------------------------------
+# INITIALIZATION
+# -------------------------------------------------------
+
+init_app() {
+    log_info "Initializing $(get_full_version)"
+    
+    # Load configuration
+    load_config
+    
+    # Validate system
+    if ! validate_system; then
+        log_error "System validation failed"
+        return 1
+    fi
+    
+    # Initialize temporary directory
+    if ! init_temp_dir; then
+        log_error "Failed to initialize temporary directory"
+        return 1
+    fi
+    
+    # Export environment
+    export_environment
+    
+    log_info "Initialization complete"
+    return 0
+}
+
+# -------------------------------------------------------
+# COMMANDS
+# -------------------------------------------------------
+
+cmd_status() {
+    log_info "Running status check"
+    
+    # Get SMART drives
+    local smart_drives=$(get_smart_drives)
+    local drive_count=$(echo "$smart_drives" | wc -w)
+    
+    echo ""
+    echo "=== System Status ==="
+    echo "OMV Version: ${OMV_VERSION:-Unknown}"
+    echo "SMART Drives: $drive_count"
+    echo ""
+    
+    for drive in $smart_drives; do
+        echo "Drive: /dev/$drive"
+        smartctl -H "/dev/$drive" 2>/dev/null | grep -i "overall"
+    done
+    
+    echo ""
+    log_info "Status check complete"
+}
+
+cmd_test() {
+    log_info "Running drive self-tests"
+    echo "Drive self-test functionality coming soon..."
+    log_info "Test complete"
+}
+
+cmd_report() {
+    log_info "Generating report"
+    echo "Report generation coming soon..."
+    log_info "Report complete"
+}
+
+cmd_config() {
+    local subcommand="${1:-show}"
+    shift || true
+    
+    case "$subcommand" in
+        backup)
+            local reason="${1:-manual backup}"
+            backup_config "$reason"
+            ;;
+        restore)
+            local backup_file="$1"
+            if [ -z "$backup_file" ]; then
+                # Interactive restore
+                list_config_backups
+                echo
+                read -p "Enter backup number to restore (or 'q' to cancel): " choice
+                
+                if [ "$choice" = "q" ] || [ "$choice" = "Q" ]; then
+                    echo "Restore cancelled."
+                    return 1
+                fi
+                
+                if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+                    echo "Invalid selection. Please enter a number."
+                    return 1
+                fi
+                
+                backup_file=$(get_backup_by_number "$choice")
+                if [ -z "$backup_file" ]; then
+                    echo "Invalid backup number."
+                    return 1
+                fi
+            elif [[ "$backup_file" =~ ^[0-9]+$ ]]; then
+                # Backup number provided
+                backup_file=$(get_backup_by_number "$backup_file")
+                if [ -z "$backup_file" ]; then
+                    echo "Invalid backup number: $1"
+                    return 1
+                fi
+            fi
+            
+            # Confirm restoration
+            echo "Selected backup: $(basename "$backup_file")"
+            read -p "Restore this backup? This will replace your current configuration. [y/N]: " confirm
+            
+            if [[ ! "$confirm" =~ ^[Yy] ]]; then
+                echo "Restore cancelled."
+                return 1
+            fi
+            
+            restore_config "$backup_file"
+            ;;
+        list-backups|list)
+            list_config_backups
+            ;;
+        info)
+            local backup_file="$1"
+            if [ -z "$backup_file" ]; then
+                echo "Usage: $(basename "$0") config info <backup_number_or_file>"
+                return 1
+            fi
+            
+            if [[ "$backup_file" =~ ^[0-9]+$ ]]; then
+                backup_file=$(get_backup_by_number "$backup_file")
+                if [ -z "$backup_file" ]; then
+                    echo "Invalid backup number: $1"
+                    return 1
+                fi
+            fi
+            
+            show_backup_info "$backup_file"
+            ;;
+        clean)
+            clean_all_backups
+            ;;
+        show|"")
+            show_config
+            ;;
+        --help|-h|help)
+            show_config_help
+            ;;
+        *)
+            echo "Unknown config subcommand: $subcommand"
+            echo "Use '$(basename "$0") config --help' for usage information"
+            return 1
+            ;;
+    esac
+}
+
+# Show config command help
+show_config_help() {
+    echo "Usage: $(basename "$0") config <subcommand> [options]"
+    echo ""
+    echo "Manage configuration and backups."
+    echo ""
+    echo "Subcommands:"
+    echo "  show                Show current configuration (default)"
+    echo "  backup [reason]     Create a manual backup of current configuration"
+    echo "  restore [file|num]  Restore configuration from backup (interactive if no file specified)"
+    echo "  list-backups        List all available configuration backups"
+    echo "  info <file|num>     Show detailed information about a backup"
+    echo "  clean               Delete all configuration backups (with confirmation)"
+    echo "  --help, -h          Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $(basename "$0") config show              # Show current configuration"
+    echo "  $(basename "$0") config backup            # Create manual backup"
+    echo "  $(basename "$0") config list-backups      # List all backups"
+    echo "  $(basename "$0") config restore           # Interactive restore"
+    echo "  $(basename "$0") config restore 1         # Restore backup #1"
+    echo "  $(basename "$0") config info 2            # Show info for backup #2"
+    echo "  $(basename "$0") config clean             # Delete all backups"
+    echo ""
+}
+
+# -------------------------------------------------------
+# CLEANUP
+# -------------------------------------------------------
+
+cleanup() {
+    log_debug "Starting cleanup"
+    
+    # Stop sudo keepalive process
+    cleanup_sudo_keepalive
+    
+    # Run other cleanup handlers
+    run_cleanup_handlers
+    
+    log_debug "Cleanup complete"
+}
+
+# Register cleanup trap
+trap cleanup EXIT INT TERM
+
+# -------------------------------------------------------
+# SUDO PRIVILEGES MANAGEMENT
+# -------------------------------------------------------
+
+# Initialize sudo privileges and keep them alive
+init_sudo_privileges() {
+    # Check if already running as root
+    if [ "$(id -u)" -eq 0 ]; then
+        log_debug "Already running as root, no need for sudo"
+        export SUDO_PRIVILEGES_INITIALIZED="true"
+        return 0
+    fi
+    
+    # Don't elevate for help/version commands
+    local needs_root=true
+    for arg in "$@"; do
+        if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "--version" ]] || [[ "$arg" == "-v" ]]; then
+            needs_root=false
+            break
+        fi
+    done
+    
+    if [ "$needs_root" = false ]; then
+        return 0
+    fi
+    
+    # Try to obtain sudo privileges
+    log_info "Root privileges required for SMART access"
+    
+    if ! command -v sudo >/dev/null 2>&1; then
+        log_error "sudo command not found"
+        echo "Error: Root privileges required but sudo not available"
+        echo "Please run as root: su -c '$0 $*'"
+        exit 1
+    fi
+    
+    # Try to get sudo access with a simple command
+    if ! sudo true 2>/dev/null; then
+        log_error "Failed to obtain sudo privileges"
+        echo "Error: Failed to obtain sudo privileges"
+        echo "Please check your sudo configuration or run as root"
+        exit 1
+    fi
+    
+    log_debug "Sudo privileges confirmed"
+    
+    # Start background process to keep sudo token alive
+    (
+        while true; do
+            sleep 60
+            sudo -v 2>/dev/null || exit 0
+        done
+    ) &
+    
+    # Save PID of background process for cleanup
+    export SUDO_KEEPALIVE_PID=$!
+    log_debug "Started sudo keepalive process (PID: $SUDO_KEEPALIVE_PID)"
+    export SUDO_PRIVILEGES_INITIALIZED="true"
+    
+    return 0
+}
+
+# Cleanup sudo keepalive when script exits
+cleanup_sudo_keepalive() {
+    if [ -n "$SUDO_KEEPALIVE_PID" ] && kill -0 "$SUDO_KEEPALIVE_PID" 2>/dev/null; then
+        log_debug "Stopping sudo keepalive process (PID: $SUDO_KEEPALIVE_PID)"
+        kill "$SUDO_KEEPALIVE_PID" 2>/dev/null
+        wait "$SUDO_KEEPALIVE_PID" 2>/dev/null
+        unset SUDO_KEEPALIVE_PID
+    fi
+}
+
+# Check if we need to elevate to root and do it
+check_and_elevate() {
+    # Initialize sudo privileges (will handle all the logic)
+    init_sudo_privileges "$@"
+}
+
+# -------------------------------------------------------
+# MAIN
+# -------------------------------------------------------
+
+main() {
+    # Check if we need sudo elevation first
+    check_and_elevate "$@"
+    
+    # Parse options
+    local debug=false
+    local config_file=""
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            --version|-v)
+                show_version
+                exit 0
+                ;;
+            --debug)
+                debug=true
+                shift
+                ;;
+            --config)
+                config_file="$2"
+                shift 2
+                ;;
+            status|test|report|config)
+                command="$1"
+                shift
+                break
+                ;;
+            *)
+                echo "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Enable debug if requested
+    if [ "$debug" = true ]; then
+        set_log_level "debug"
+        log_debug "Debug mode enabled"
+    fi
+    
+    # Initialize application
+    if ! init_app; then
+        log_error "Initialization failed"
+        exit 1
+    fi
+    
+    # Execute command
+    case "${command:-status}" in
+        status)
+            cmd_status
+            ;;
+        test)
+            cmd_test
+            ;;
+        report)
+            cmd_report
+            ;;
+        config)
+            cmd_config "$@"
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            exit 1
+            ;;
+    esac
+    
+    log_info "$(get_full_version) completed successfully"
+    exit 0
+}
+
+# Run main
+main "$@"

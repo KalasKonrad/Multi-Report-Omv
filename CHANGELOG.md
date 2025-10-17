@@ -1,4 +1,13 @@
 # Changelog
+## [v1.2.3] - 2025-09-09
+### Fixed
+- Critical bug in drive selftest scheduling logic that prevented drives from being selected for testing in Mode 1 (spread across period)
+- Fixed drive rotation calculation for weekly and quarterly test periods
+- Drives with overdue tests will now be properly scheduled and tested
+
+## [v1.2.2] - 2025-07-19
+### Added
+- Email summary now explicitly lists which drives have warnings or critical issues, including the drive name and reason, instead of a generic monitoring message.
 
 ## [v1.2.1] - 2025-07-14
 ### Fixed

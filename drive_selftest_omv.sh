@@ -4,7 +4,7 @@ LANG="en_US.UTF-8"
 if [[ $TERM == "dumb" ]]; then          # Set a terminal as the script may generate an error message if using 'dumb'.
     export TERM=unknown
 fi
-##### Version 1.05 OMV (Based on TrueNAS drive_selftest.sh v1.05)
+##### Version 1.06 OMV (Based on TrueNAS drive_selftest.sh v1.05)
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -53,6 +53,12 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 ### USE [-help] FOR ADDITIONAL INFORMATION
 
 # Change Log
+#
+# Version 1.06 OMV (09 September 2025) - Bug Fix
+#
+# - Fixed critical bug in drive selection logic for Mode 1 (spread across period)
+# - Corrected drive rotation calculation that was preventing tests from running
+# - Drives with overdue tests will now be properly scheduled
 #
 # Version 1.05 OMV (02 July 2025) - OMV Adaptation
 #
@@ -181,8 +187,8 @@ fi
 programver3=$(( programver3 + 0 ))        # Make Base 10
 programver4=$(( programver4 + 0 ))
 Program_Name="drive_selftest_omv.sh"
-Version="1.05"                            # Current version of the script
-Version_Date="(02 July 2025)"
+Version="1.06"                            # Current version of the script
+Version_Date="(09 September 2025)"
 
 # GLOBAL VARIABLES - MUST BE DEFINED EARLY BEFORE FUNCTION TO BE GLOBAL
 Drive_Disk_Query=""
@@ -589,23 +595,77 @@ smartctl_selftest() {
                     cycle_position=$((day_of_month % period_days))
                 fi
                 
-                # Calculate drives per cycle safely
-                days_in_cycle=$((period_days / 7))
-                if [[ $days_in_cycle -lt 1 ]]; then
-                    days_in_cycle=1
-                fi
-                drives_per_cycle=$((Drive_Count / days_in_cycle + 1))
-                if [[ $drives_per_cycle -lt $Drives_to_Test_Per_Day ]]; then
-                    drives_per_cycle=$Drives_to_Test_Per_Day
+                # Calculate active days in the period
+                case $Drives_Test_Period in
+                    "Week") total_active_days=7 ;;  # All days are potentially active
+                    "Month") total_active_days=28 ;; # Approximate month length
+                    "Quarter") total_active_days=90 ;; # Quarter length
+                    "Biannual") total_active_days=180 ;; # Biannual length  
+                    "Annual") total_active_days=365 ;; # Annual length
+                    *) total_active_days=28 ;;
+                esac
+                
+                # Count actual active days for this test type
+                active_days_count=0
+                IFS=',' read -ra DAYS_ARRAY <<< "$Drives_Tested_Days_of_the_Week"
+                for day in "${DAYS_ARRAY[@]}"; do
+                    ((active_days_count++))
+                done
+                
+                # Calculate which drives to test based on day position within active days
+                if [[ $active_days_count -gt 0 ]]; then
+                    # Find our position among active days
+                    day_position=0
+                    for day in "${DAYS_ARRAY[@]}"; do
+                        if [[ $day -eq $DOW ]]; then
+                            break
+                        fi
+                        ((day_position++))
+                    done
+                    
+                    # Calculate drives per active day - ensure each drive tested exactly once per period
+                    if [[ $Drive_Count -le $active_days_count ]]; then
+                        # Fewer drives than active days - some days get 1 drive, others get 0
+                        drives_per_active_day=1
+                        extra_drives=$Drive_Count
+                        
+                        # Find which drives to test today
+                        if [[ $day_position -lt $Drive_Count ]]; then
+                            drives_for_today=1
+                            start_drive=$day_position
+                        else
+                            drives_for_today=0
+                            start_drive=0
+                        fi
+                    else
+                        # More drives than active days - distribute evenly
+                        drives_per_active_day=$((Drive_Count / active_days_count))
+                        extra_drives=$((Drive_Count % active_days_count))
+                        
+                        # Calculate start position for this day
+                        start_drive=0
+                        for ((i=0; i<day_position; i++)); do
+                            drives_for_prev_day=$drives_per_active_day
+                            if [[ $i -lt $extra_drives ]]; then
+                                ((drives_for_prev_day++))
+                            fi
+                            start_drive=$((start_drive + drives_for_prev_day))
+                        done
+                        
+                        # Calculate drives for current day
+                        drives_for_today=$drives_per_active_day
+                        if [[ $day_position -lt $extra_drives ]]; then
+                            ((drives_for_today++))
+                        fi
+                    fi
+                    
+                    # Select the drives for today
+                    drives_array=($smartdrives_sorted)
+                    for ((i=0; i<drives_for_today && start_drive+i<Drive_Count; i++)); do
+                        drives_to_test="$drives_to_test ${drives_array[$((start_drive + i))]}"
+                    done
                 fi
                 
-                start_index=$((cycle_position * drives_per_cycle))
-                drives_array=($smartdrives_sorted)
-                for ((i=start_index; i<start_index+Drives_to_Test_Per_Day && i<Drive_Count; i++)); do
-                    if [[ -n "${drives_array[$i]}" ]]; then
-                        drives_to_test="$drives_to_test ${drives_array[$i]}"
-                    fi
-                done
                 drives_to_test=$(echo $drives_to_test | xargs)
                 ;;
             2)
