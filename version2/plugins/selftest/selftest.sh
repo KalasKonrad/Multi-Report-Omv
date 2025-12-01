@@ -96,19 +96,19 @@ init_selftest_history() {
     log_info "Initializing selftest history tracking (CSV format)"
     
     if [[ ! -d "$SELFTEST_DATA_DIR" ]]; then
-        mkdir -p "$SELFTEST_DATA_DIR" || {
+        if ! mkdir -p "$SELFTEST_DATA_DIR" 2>/dev/null; then
             log_error "Failed to create history directory: $SELFTEST_DATA_DIR"
             return 1
-        }
+        fi
         log_info "Created history directory: $SELFTEST_DATA_DIR"
     fi
     
     if [[ ! -f "$DRIVES_FILE" ]]; then
-        echo "Serial Number,Drive ID,Model,Capacity,Type,Firmware,UUID,Label,First Seen,Last Seen" > "$DRIVES_FILE" || {
+        if ! echo "Serial Number,Drive ID,Model,Capacity,Type,Firmware,UUID,Label,First Seen,Last Seen" > "$DRIVES_FILE"; then
             log_error "Failed to create drives file: $DRIVES_FILE"
             return 1
-        }
-        chmod 644 "$DRIVES_FILE"
+        fi
+        chmod 644 "$DRIVES_FILE" 2>/dev/null
         log_info "Created drives CSV: $DRIVES_FILE"
     else
         # Check if migration is needed (old format without UUID,Label columns)
@@ -149,7 +149,7 @@ init_selftest_history() {
             log_error "Failed to create test history file: $TEST_HISTORY_FILE"
             return 1
         fi
-        chmod 644 "$TEST_HISTORY_FILE"
+        chmod 644 "$TEST_HISTORY_FILE" 2>/dev/null
         log_info "Created test history CSV: $TEST_HISTORY_FILE"
     fi
     
@@ -327,7 +327,8 @@ register_drive_on_demand() {
     local label=$(get_drive_label "$drive")
     
     if [ -n "$serial" ]; then
-        register_drive "$drive" "$serial" "$model" "$size" "$type" "$firmware" "$uuid" "$label"
+        # Redirect register_drive output to stderr so it doesn't pollute the return value
+        register_drive "$drive" "$serial" "$model" "$size" "$type" "$firmware" "$uuid" "$label" >&2
         log_debug "Drive $drive registered: $model ($serial)"
         echo "$serial"  # Return serial for use by caller
         return 0

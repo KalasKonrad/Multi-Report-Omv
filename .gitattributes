@@ -1,0 +1,12 @@
+# Shell scripts must use LF line endings (Unix-style)
+*.sh text eol=lf
+
+# Configuration files should use LF
+*.conf text eol=lf
+*.csv text eol=lf
+
+# Markdown files
+*.md text eol=lf
+
+# Let Git handle line endings for other text files automatically
+* text=auto
