@@ -412,8 +412,12 @@ collect_drive_data() {
     
     # Check power mode FIRST, before any other smartctl calls that might wake the drive
     log_debug "  → Checking power mode with: smartctl -n standby /dev/$drive_id"
-    local power_check_output=$(run_smartctl -n standby /dev/$drive_id 2>&1)
-    local power_check_exit=$?
+    local power_check_output
+    local power_check_exit
+    # Capture both output and exit code properly
+    power_check_output=$(run_smartctl -n standby /dev/$drive_id 2>&1; echo "|||$?")
+    power_check_exit="${power_check_output##*|||}"
+    power_check_output="${power_check_output%|||*}"
     local power_mode=""
     
     log_debug "  → Power check exit code: $power_check_exit"

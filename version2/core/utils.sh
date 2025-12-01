@@ -282,8 +282,10 @@ run_cleanup_handlers() {
 run_smartctl() {
     if is_root; then
         smartctl "$@"
+        return $?
     else
         sudo smartctl "$@"
+        return $?
     fi
 }
 
