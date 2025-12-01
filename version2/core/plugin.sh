@@ -269,7 +269,7 @@ read_plugin_summary() {
     if [ -f "$summary_file" ]; then
         cat "$summary_file"
     else
-        log_debug "No summary file found: $summary_file"
+        # Silently return 1 if summary doesn't exist (not all plugins create summaries)
         return 1
     fi
 }
