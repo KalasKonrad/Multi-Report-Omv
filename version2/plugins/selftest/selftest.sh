@@ -315,27 +315,31 @@ get_serial_cached() {
 # This function will wake the drive if it's sleeping, but only when actually scheduling a test
 register_drive_on_demand() {
     local drive="$1"
+    local serial model size type firmware uuid label
     
-    log_debug "Registering drive $drive (will wake if sleeping)"
+    {
+        log_debug "Registering drive $drive (will wake if sleeping)"
+        
+        serial=$(get_drive_serial "$drive")
+        model=$(get_drive_model "$drive")
+        size=$(get_drive_size "$drive")
+        type=$(get_drive_type "$drive")
+        firmware=$(get_drive_firmware "$drive")
+        uuid=$(get_drive_uuid "$drive")
+        label=$(get_drive_label "$drive")
+        
+        if [ -n "$serial" ]; then
+            register_drive "$drive" "$serial" "$model" "$size" "$type" "$firmware" "$uuid" "$label"
+            log_debug "Drive $drive registered: $model ($serial)"
+        else
+            log_warning "Could not get serial number for drive $drive"
+            return 1
+        fi
+    } >&2
     
-    local serial=$(get_drive_serial "$drive")
-    local model=$(get_drive_model "$drive")
-    local size=$(get_drive_size "$drive")
-    local type=$(get_drive_type "$drive")
-    local firmware=$(get_drive_firmware "$drive")
-    local uuid=$(get_drive_uuid "$drive")
-    local label=$(get_drive_label "$drive")
-    
-    if [ -n "$serial" ]; then
-        # Redirect register_drive output to stderr so it doesn't pollute the return value
-        register_drive "$drive" "$serial" "$model" "$size" "$type" "$firmware" "$uuid" "$label" >&2
-        log_debug "Drive $drive registered: $model ($serial)"
-        echo "$serial"  # Return serial for use by caller
-        return 0
-    else
-        log_warning "Could not get serial number for drive $drive"
-        return 1
-    fi
+    # Only return the serial number to stdout (everything else went to stderr)
+    echo "$serial"
+    return 0
 }
 
 # Execute a SMART test using smartctl
