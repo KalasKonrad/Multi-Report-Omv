@@ -1,0 +1,23 @@
+{
+  "name": "report",
+  "version": "1.0.0",
+  "description": "Automated scheduled drive health reports with configurable periods (weekly, monthly, quarterly, yearly, custom)",
+  "author": "Multi-Report-OMV",
+  "enabled": true,
+  "commands": [],
+  "auto_run": true,
+  "dependencies": [
+    "awk",
+    "date"
+  ],
+  "config_options": [
+    "REPORT_ENABLED",
+    "REPORT_EMAIL",
+    "REPORT_FORMAT",
+    "REPORT_WEEKLY_ENABLED",
+    "REPORT_MONTHLY_ENABLED",
+    "REPORT_QUARTERLY_ENABLED",
+    "REPORT_YEARLY_ENABLED",
+    "REPORT_CUSTOM_ENABLED"
+  ]
+}

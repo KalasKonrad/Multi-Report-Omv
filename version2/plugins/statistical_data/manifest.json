@@ -1,0 +1,16 @@
+{
+  "name": "statistical_data",
+  "version": "2.0.0",
+  "description": "Comprehensive SMART data collection for trend analysis and predictive failure detection",
+  "author": "Multi-Report-OMV",
+  "requires_root": false,
+  "enabled": true,
+  "dependencies": ["smartctl", "lsblk"],
+  "config_options": {
+    "STATS_ENABLED": "true",
+    "STATS_HISTORY_FILE": "${BASE_DIR}/data/statistical_data/history.csv",
+    "STATS_RETENTION_DAYS": "730",
+    "STATS_COLLECT_ON_SELFTEST": "true",
+    "STATS_DAILY_COLLECTION": "true"
+  }
+}

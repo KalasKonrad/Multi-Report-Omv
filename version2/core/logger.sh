@@ -1,7 +1,21 @@
 #!/bin/bash
-# Multi-Report-OMV v2.0
-# Core logger module
+################################################################################
+# Multi-Report-OMV
+# Core Logger Module
 # Based on SnapRAID Manager logger architecture
+################################################################################
+#
+# Table of Contents:
+# 1. Configuration
+# 2. Logging Functions
+# 3. Log Management
+# 4. Module Initialization
+#
+################################################################################
+
+################################################################################
+# 1. CONFIGURATION
+################################################################################
 
 # Detect script location
 [ -z "$BASE_DIR" ] && BASE_DIR="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")"
@@ -18,8 +32,8 @@ mkdir -p "$LOG_DIR" 2>/dev/null || {
 declare -A LOG_LEVELS
 LOG_LEVELS=([debug]=0 [info]=1 [warning]=2 [error]=3)
 
-# Default log level
-CURRENT_LOG_LEVEL=1  # info
+# Default log level (exported so plugins inherit it)
+export CURRENT_LOG_LEVEL=1  # info
 
 # Current log file
 LOG_FILE=""
@@ -34,12 +48,14 @@ TEXT_PURPLE='\033[0;35m'
 TEXT_CYAN='\033[0;36m'
 TEXT_WHITE='\033[0;37m'
 
+################################################################################
+# 2. LOGGING FUNCTIONS
+################################################################################
+
 # Initialize the logging system
 init_logging() {
-    # If a log file is already set and exists, don't create a new one
-    if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
-        # Just make sure the initialization flag is set
-        export LOGGING_INITIALIZED="true"
+    # If logging is already initialized, don't create a new log file
+    if [ "$LOGGING_INITIALIZED" = "true" ] && [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
         log_debug "Reusing existing log file: $LOG_FILE"
         return 0
     fi
@@ -138,6 +154,10 @@ log_info() {
     log "info" "$@"
 }
 
+log_success() {
+    log "info" "✓ $@"
+}
+
 log_warning() {
     log "warning" "$@"
 }
@@ -150,13 +170,17 @@ log_error() {
 set_log_level() {
     local level="$1"
     if [ -n "${LOG_LEVELS[$level]}" ]; then
-        CURRENT_LOG_LEVEL="${LOG_LEVELS[$level]}"
+        export CURRENT_LOG_LEVEL="${LOG_LEVELS[$level]}"
         log_debug "Log level set to: $level"
     else
         log_error "Invalid log level: $level"
         return 1
     fi
 }
+
+################################################################################
+# 3. LOG MANAGEMENT
+################################################################################
 
 # Clean up old log files
 cleanup_old_logs() {
@@ -184,14 +208,18 @@ cleanup_old_logs() {
     fi
 }
 
+################################################################################
+# 4. MODULE INITIALIZATION
+################################################################################
+
 # Initialize logging by default when sourced
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # Script is being executed directly
     echo "$(get_full_version 2>/dev/null || echo "Multi-Report-OMV Unknown") - Logger Module"
     echo "This module should be sourced, not executed directly."
 else
-    # Only initialize if not already initialized
-    if [ -z "$LOGGING_INITIALIZED" ] || [ -z "$LOG_FILE" ]; then
+    # Only initialize if not already initialized (check both conditions with AND)
+    if [ "$LOGGING_INITIALIZED" != "true" ] || [ -z "$LOG_FILE" ]; then
         init_logging
     fi
 fi

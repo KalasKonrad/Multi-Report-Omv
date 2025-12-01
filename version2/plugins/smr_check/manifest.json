@@ -1,0 +1,20 @@
+{
+  "name": "smr_check",
+  "version": "1.0.0",
+  "description": "SMR/CMR drive detection - identifies Shingled Magnetic Recording drives",
+  "author": "Multi-Report-OMV",
+  "enabled": true,
+  "dependencies": [
+    "lsblk",
+    "smartctl"
+  ],
+  "commands": [
+    "smr-check"
+  ],
+  "config_options": [
+    "SMR_CHECK_ENABLED",
+    "SMR_CACHE_FILE",
+    "SMR_WARN_ON_DETECTION",
+    "SMR_AUTO_UPDATE_DB"
+  ]
+}

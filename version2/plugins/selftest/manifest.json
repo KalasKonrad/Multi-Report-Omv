@@ -1,0 +1,14 @@
+{
+  "name": "selftest",
+  "version": "2.0.0",
+  "description": "SMART self-test scheduler with rotation algorithm",
+  "author": "Multi-Report-OMV",
+  "requires_root": true,
+  "enabled": true,
+  "dependencies": ["smartctl"],
+  "config_options": {
+    "SELFTEST_ENABLED": "true",
+    "SELFTEST_ACTIVE_DAYS": "7",
+    "SELFTEST_TYPE": "short"
+  }
+}
