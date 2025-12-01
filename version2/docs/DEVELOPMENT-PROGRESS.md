@@ -1,9 +1,9 @@
 # Multi-Report-OMV v2.0 Development Progress
 
-**Last Updated:** November 3, 2025  
+**Last Updated:** December 1, 2025  
 **Branch:** v2.0-dev  
 **Current Version:** 2.0.0-dev  
-**Status:** Core Foundation + Statistical Data + Report Plugin Complete
+**Status:** Core Foundation Complete + All 4 Plugins Operational + Testing Phase
 
 ## ✅ Completed Components
 
@@ -328,13 +328,17 @@ REPORT_ALERT_CRC_ERRORS=true
 
 ## 🔄 In Progress
 
-### Plugin System (40%)
+### Plugin System (95%)
 - ✅ Directory structure created (`plugins/`)
-- ✅ Statistical data plugin complete (auto-run enabled)
-- ✅ Report plugin complete (auto-run enabled)
-- ⏳ Plugin loader/manager
+- ✅ Plugin loader/manager complete (core/plugin.sh)
+- ✅ Plugin discovery and execution framework complete
+- ✅ All 4 plugins operational:
+  - report: Multi-schedule reporting
+  - selftest: SMART test rotation with proper history tracking
+  - smr_check: SMR/CMR detection with caching
+  - statistical_data: Comprehensive SMART data collection
+- ✅ Plugin summary combination system
 - ⏳ Plugin manifest schema documentation
-- ⏳ Plugin execution framework
 
 ## ⏳ Pending Components
 
@@ -367,24 +371,38 @@ Priority order:
 - ⏳ Alert threshold testing
 - ⏳ Multi-drive scenario testing
 
-### 3. Testing (0%)
-- ⏳ Unit tests for core modules
-- ⏳ Integration tests on OMV 7
-- ⏳ Sudo system verification
-- ⏳ Drive detection tests (8 drives: sda-sdh)
-- ⏳ Statistical data collection verification
+### 3. Testing (60%)
+- ✅ Integration tests on OMV 7 (real system)
+- ✅ Sudo system verified and working
+- ✅ Drive detection working (8 drives: sda-sdh)
+- ✅ Statistical data collection verified (46+ metrics per drive)
+- ✅ Selftest plugin verified (rotation algorithm working)
+- ✅ SMR detection working (cached results)
+- ✅ Sleep protection verified (counted mode with skip tracking)
+- ✅ Line ending issues resolved (CRLF→LF conversion)
 - ⏳ Report generation end-to-end tests
 - ⏳ Email notification tests
-- ⏳ Cron job compatibility
+- ⏳ Cron job compatibility tests
+- ⏳ Long-term stability testing
 
 ### 4. Migration Tools (0%)
 - ⏳ v1.x configuration converter
 - ⏳ Data migration scripts
 - ⏳ Backward compatibility layer
 
-## 📝 Latest Session: November 3, 2025
+## 📝 Latest Session: December 1, 2025
 
 ### Completed Today
+1. ✅ **Line Ending Fixes** - Converted all shell scripts from CRLF to LF
+2. ✅ **Selftest Error Handling** - Fixed log pollution in serial number capture
+3. ✅ **Test History Rebuild** - Created tool to rebuild from actual SMART data
+4. ✅ **Sleep Protection Testing** - Verified sleeping drive detection works correctly
+5. ✅ **Clean Summary Reports** - Removed debug noise from plugin output
+6. ✅ **Git Attributes** - Added .gitattributes to enforce LF line endings
+
+### Previous Session: November 3, 2025
+
+### Completed
 1. ✅ **Dual CSV System** - Raw numeric + human-readable formatted values
 2. ✅ **Format Helper Functions** - `format_bytes_human()` and `format_number_human()` in utils.sh
 3. ✅ **Statistical Data Plugin Enhanced** - Both CSV files written simultaneously with proper formatting
@@ -478,16 +496,15 @@ Priority order:
 | Main Executable | 100% | ✅ Complete |
 | Sudo Management | 100% | ✅ Complete |
 | Configuration | 100% | ✅ Complete |
-| Plugin System | 40% | 🔄 In Progress |
+| Plugin System | 95% | ✅ Near Complete |
 | Statistical Data Plugin | 100% | ✅ Complete |
 | Report Plugin | 100% | ✅ Complete |
-| Drive Self-Test | 0% | ⏳ Pending |
-| SMART Monitor | 0% | ⏳ Pending |
-| Email Notify | 0% | ⏳ Pending |
-| Documentation | 85% | 🔄 In Progress |
-| Testing | 10% | 🔄 In Progress |
+| Selftest Plugin | 100% | ✅ Complete |
+| SMR Check Plugin | 100% | ✅ Complete |
+| Documentation | 90% | 🔄 In Progress |
+| Testing | 60% | 🔄 In Progress |
 
-**Overall: ~60% Complete**
+**Overall: ~85% Complete**
 
 ## 🔧 Technical Improvements vs. v1.x
 
