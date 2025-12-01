@@ -14,6 +14,8 @@ version2/
 │   ├── config.sh                # Configuration management
 │   ├── config-backup.sh         # Configuration backup/restore
 │   ├── config-migration.sh      # Configuration version migration
+│   ├── notification.sh          # Notification framework (pluggable delivery)
+│   ├── email.sh                 # Email notification delivery
 │   ├── plugin.sh                # Plugin discovery and execution
 │   └── utils.sh                 # Shared utilities (includes SMART, CSV, email functions)
 │
@@ -97,6 +99,12 @@ version2/
 - **Implemented**: `config.sh` handles both defaults and user config with CONFIG array
 - **Backup/Restore**: `config-backup.sh` provides automatic backup/restore functionality  
 - **Migration**: `config-migration.sh` handles version upgrades and variable renames
+
+### Notifications
+- **New in v2.0**: Pluggable notification framework
+- **Implemented**: `notification.sh` provides registry-based delivery system
+- **Delivery Methods**: `email.sh` (others can be added: discord.sh, telegram.sh, etc.)
+- **Features**: Automatic error detection, notification levels, test commands
 
 ### Logging
 - **Old**: Echo to stdout/stderr

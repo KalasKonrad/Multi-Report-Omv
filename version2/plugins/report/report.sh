@@ -1470,7 +1470,7 @@ EOF
 EOF
 }
 
-# Send report via email
+# Send report via email (uses notification system)
 send_report_email() {
     local report_name="$1"
     local report_file="$2"
@@ -1490,33 +1490,38 @@ send_report_email() {
         return 1
     fi
     
-    log_info "Sending report to: $REPORT_EMAIL"
+    log_info "Sending report notification"
     
-    # Prepare email subject
-    local subject="$report_name - $(date '+%Y-%m-%d')"
-    log_debug "    Email subject: $subject"
-    log_debug "    Report format: $REPORT_FORMAT"
-    
-    # Send email using existing email system
-    # Note: This uses the email configuration from core system
-    if [ "$REPORT_FORMAT" = "html" ]; then
-        # HTML email
-        log_debug "    Sending HTML email..."
-        mail -s "$subject" -a "Content-Type: text/html" "$REPORT_EMAIL" < "$report_file"
+    # Use notification system if available
+    if type send_report_notification &>/dev/null; then
+        # Detect if report has errors (check for ERROR, CRITICAL, FAIL patterns)
+        local has_errors="false"
+        if grep -qi "ERROR\|CRITICAL\|FAIL" "$report_file" 2>/dev/null; then
+            has_errors="true"
+        fi
+        
+        send_report_notification "$report_name" "$report_file" "$has_errors"
+        return $?
     else
-        # Text email
-        log_debug "    Sending text email..."
-        mail -s "$subject" "$REPORT_EMAIL" < "$report_file"
-    fi
-    
-    local mail_result=$?
-    log_debug "    Mail command result: $mail_result"
-    
-    if [ $mail_result -eq 0 ]; then
-        log_info "Report emailed successfully"
-    else
-        log_error "Failed to send report email (exit code: $mail_result)"
-        return 1
+        # Fallback to direct mail command if notification system not available
+        log_warning "Notification system not available, using direct mail command"
+        
+        local subject="$report_name - $(date '+%Y-%m-%d')"
+        
+        if [ "$REPORT_FORMAT" = "html" ]; then
+            mail -s "$subject" -a "Content-Type: text/html" "$REPORT_EMAIL" < "$report_file"
+        else
+            mail -s "$subject" "$REPORT_EMAIL" < "$report_file"
+        fi
+        
+        local mail_result=$?
+        
+        if [ $mail_result -eq 0 ]; then
+            log_info "Report emailed successfully"
+        else
+            log_error "Failed to send report email (exit code: $mail_result)"
+            return 1
+        fi
     fi
     
     return 0

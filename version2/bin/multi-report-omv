@@ -550,6 +550,7 @@ source "${BASE_DIR}/core/utils.sh"
 source "${BASE_DIR}/core/config.sh"
 source "${BASE_DIR}/core/config-backup.sh"
 source "${BASE_DIR}/core/config-migration.sh"
+source "${BASE_DIR}/core/notification.sh"
 source "${BASE_DIR}/core/plugin.sh"
 
 # Note: Logging initialization is delayed until we know we need it
@@ -748,9 +749,73 @@ cmd_status() {
 }
 
 cmd_test() {
-    log_info "Running drive self-tests"
-    echo "Drive self-test functionality coming soon..."
-    log_info "Test complete"
+    local test_type="${1:-help}"
+    
+    case "$test_type" in
+        help|--help)
+            echo "Test Commands:"
+            echo "  test email      Send a test email notification"
+            echo "  test drives     Test drive detection"
+            echo "  test config     Test configuration loading"
+            echo ""
+            echo "Usage: multi-report-omv test <type>"
+            ;;
+        email)
+            log_info "Testing email notification"
+            echo "Testing email notification..."
+            echo ""
+            
+            # Check if email is enabled
+            if [ "$(get_config "EMAIL_ENABLED" "false")" != "true" ]; then
+                echo "ERROR: Email is not enabled in configuration"
+                echo "Please set EMAIL_ENABLED=true in your config file"
+                return 1
+            fi
+            
+            # Check if EMAIL_TO is configured
+            if [ -z "$(get_config "EMAIL_TO")" ]; then
+                echo "ERROR: EMAIL_TO is not configured"
+                echo "Please set EMAIL_TO=your@email.com in your config file"
+                return 1
+            fi
+            
+            # Send test email
+            if type send_test_email &>/dev/null; then
+                send_test_email
+            else
+                echo "ERROR: Email notification system not loaded"
+                return 1
+            fi
+            ;;
+        drives)
+            log_info "Testing drive detection"
+            echo "Testing drive detection..."
+            echo ""
+            local drives=$(get_smart_drives)
+            if [ -z "$drives" ]; then
+                echo "No SMART-capable drives found"
+                return 1
+            fi
+            echo "Found SMART-capable drives:"
+            for drive in $drives; do
+                echo "  - $drive"
+            done
+            ;;
+        config)
+            log_info "Testing configuration"
+            echo "Testing configuration..."
+            echo ""
+            echo "Configuration loaded successfully"
+            echo "Config file: $USER_CONFIG"
+            echo "Log level: $(get_config "LOG_LEVEL" "info")"
+            echo "Email enabled: $(get_config "EMAIL_ENABLED" "false")"
+            ;;
+        *)
+            echo "Unknown test type: $test_type"
+            echo "Use 'test help' for available test types"
+            return 1
+            ;;
+    esac
 }
 
 cmd_report() {
