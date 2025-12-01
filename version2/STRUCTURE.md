@@ -10,24 +10,26 @@ version2/
 │   └── multi-report-omv         # Main entry point
 │
 ├── core/                         # Core system modules
-│   ├── logger.sh                # Logging system (like SnapRAID Manager)
+│   ├── logger.sh                # Logging system
 │   ├── config.sh                # Configuration management
-│   ├── utils.sh                 # Shared utilities
-│   ├── smart.sh                 # SMART data collection and analysis
-│   ├── email.sh                 # Email notification system
-│   ├── csv.sh                   # CSV data management
-│   └── testing.sh               # Testing framework (future)
+│   ├── config-backup.sh         # Configuration backup/restore
+│   ├── config-migration.sh      # Configuration version migration
+│   ├── plugin.sh                # Plugin discovery and execution
+│   └── utils.sh                 # Shared utilities (includes SMART, CSV, email functions)
 │
-├── plugins/                      # Modular components (like SnapRAID Manager)
-│   ├── drive-selftest/          # Drive testing plugin
+├── plugins/                      # Modular components
+│   ├── report/                  # Report generation plugin
 │   │   ├── manifest.json
-│   │   └── drive-selftest.sh
-│   ├── smart-analysis/          # SMART analysis plugin
+│   │   └── report.sh
+│   ├── selftest/                # Drive self-test scheduling plugin
 │   │   ├── manifest.json
-│   │   └── smart-analysis.sh
-│   └── smr-check/               # SMR detection plugin
+│   │   └── selftest.sh
+│   ├── smr_check/               # SMR/CMR detection plugin
+│   │   ├── manifest.json
+│   │   └── smr_check.sh
+│   └── statistical_data/        # SMART data collection and analysis plugin
 │       ├── manifest.json
-│       └── smr-check.sh
+│       └── statistical_data.sh
 │
 ├── config/                       # Configuration files
 │   ├── multi-report-omv.conf    # Main configuration
@@ -36,9 +38,11 @@ version2/
 ├── logs/                         # Log files (timestamped)
 │
 ├── data/                         # Runtime data
-│   ├── csv/                     # CSV data files
-│   └── cache/                   # Temporary cache files
+├── tmp/                          # Temporary working directory
 │
+├── tools/                        # Development and maintenance tools
+│
+├── docs/                         # Documentation
 ├── tmp/                          # Temporary working directory
 │
 ├── docs/                         # Documentation
@@ -85,18 +89,29 @@ version2/
 ### Script Organization
 - **Old**: Monolithic scripts with embedded functions
 - **New**: Modular library system with clear interfaces
+- **Note**: SMART, CSV, and email functions consolidated in `utils.sh` for simplicity
 
 ### Configuration
 - **Old**: Variables at top of script files
 - **New**: Separate config file with validation
+- **Implemented**: `config.sh` handles both defaults and user config with CONFIG array
+- **Backup/Restore**: `config-backup.sh` provides automatic backup/restore functionality  
+- **Migration**: `config-migration.sh` handles version upgrades and variable renames
 
 ### Logging
 - **Old**: Echo to stdout/stderr
-- **New**: Proper logging framework with levels
+- **New**: Proper logging framework with levels (DEBUG, INFO, WARNING, ERROR)
+- **Implemented**: Full logging system with file output, log rotation, and exported log level to plugins
+
+### Plugin System
+- **New in v2.0**: Dynamic plugin discovery and execution via `plugin.sh`
+- **Implemented**: Plugins can be called individually or via `auto` command
+- **Note**: Plugins do NOT source core modules - they inherit from main script
 
 ### Data Storage
 - **Old**: Files in script directory
 - **New**: Organized data directory structure
+- **Implemented**: Each plugin has its own data subdirectory under `version2/data/`
 
 ### Error Handling
 - **Old**: Continue on errors

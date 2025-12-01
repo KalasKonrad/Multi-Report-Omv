@@ -1,6 +1,25 @@
 #!/bin/bash
-# Multi-Report-OMV $(get_version 2>/dev/null || echo "Unknown Version")
-# Main executable
+################################################################################
+# Multi-Report-OMV
+# Main Executable
+# SMART monitoring and reporting for OpenMediaVault
+################################################################################
+#
+# Table of Contents:
+# 1. Environment Setup
+# 2. First Run Setup
+# 3. Installation Management
+# 4. Core Module Loading
+# 5. Help and Version
+# 6. Application Commands
+# 7. Privilege Management
+# 8. Main Entry Point
+#
+################################################################################
+
+################################################################################
+# 1. ENVIRONMENT SETUP
+################################################################################
 
 # Prevent text wrapping in console output
 export COLUMNS=999
@@ -17,6 +36,10 @@ ENV_FILE="$BASE_DIR/.env"
 
 # Installation log file (stays in script directory)
 INSTALL_LOG="$BASE_DIR/installation.log"
+
+################################################################################
+# 2. FIRST RUN SETUP
+################################################################################
 
 # Function to log installation events
 log_install() {
@@ -193,54 +216,9 @@ export LOG_BASE
 export TMP_BASE
 export INSTALLATION_TYPE
 
-# Import core modules
-source "${BASE_DIR}/core/logger.sh"
-source "${BASE_DIR}/core/utils.sh"
-source "${BASE_DIR}/core/config.sh"
-
-# Note: Logging initialization is delayed until we know we need it
-# This prevents creating empty log files for simple commands like --help or --version
-
-# Check if root is required (AFTER modules loaded)
-if [ "$(get_config "REQUIRE_ROOT" "false")" = "true" ] && ! is_root; then
-    echo "ERROR: This script must be run as root when REQUIRE_ROOT is enabled."
-    echo "Please run with sudo or as the root user."
-    exit 1
-fi
-
-# Define elevate_privileges function for use by commands
-elevate_privileges() {
-    # Skip if already root
-    if is_root; then
-        return 0
-    fi
-    
-    # Check if sudo is disabled
-    if [ "$(get_config "DISABLE_SUDO" "false")" = "true" ]; then
-        log_error "Root privileges required but sudo is disabled in configuration"
-        echo "ERROR: Root privileges required. Please run as root or enable sudo."
-        return 1
-    fi
-    
-    # Initialize sudo keepalive if not already done
-    if [ "${SUDO_PRIVILEGES_INITIALIZED:-false}" != "true" ]; then
-        init_sudo_privileges
-        if [ $? -ne 0 ]; then
-            echo "ERROR: Failed to obtain required privileges."
-            return 1
-        fi
-    fi
-    
-    return 0
-}
-
-# Application info
-APP_NAME="Multi-Report-OMV"
-APP_VERSION=$(get_version 2>/dev/null || echo "Unknown Version")
-
-# -------------------------------------------------------
-# INSTALLATION MANAGEMENT
-# -------------------------------------------------------
+################################################################################
+# 3. INSTALLATION MANAGEMENT
+################################################################################
 
 # Function to uninstall Multi-Report-OMV
 uninstall_multi_report() {
@@ -562,9 +540,61 @@ EOF
     exit 0
 }
 
-# -------------------------------------------------------
-# HELP AND VERSION
-# -------------------------------------------------------
+################################################################################
+# 4. CORE MODULE LOADING
+################################################################################
+
+# Import core modules
+source "${BASE_DIR}/core/logger.sh"
+source "${BASE_DIR}/core/utils.sh"
+source "${BASE_DIR}/core/config.sh"
+source "${BASE_DIR}/core/config-backup.sh"
+source "${BASE_DIR}/core/config-migration.sh"
+source "${BASE_DIR}/core/plugin.sh"
+
+# Note: Logging initialization is delayed until we know we need it
+# This prevents creating empty log files for simple commands like --help or --version
+
+# Check if root is required (AFTER modules loaded)
+if [ "$(get_config "REQUIRE_ROOT" "false")" = "true" ] && ! is_root; then
+    echo "ERROR: This script must be run as root when REQUIRE_ROOT is enabled."
+    echo "Please run with sudo or as the root user."
+    exit 1
+fi
+
+# Define elevate_privileges function for use by commands
+elevate_privileges() {
+    # Skip if already root
+    if is_root; then
+        return 0
+    fi
+    
+    # Check if sudo is disabled
+    if [ "$(get_config "DISABLE_SUDO" "false")" = "true" ]; then
+        log_error "Root privileges required but sudo is disabled in configuration"
+        echo "ERROR: Root privileges required. Please run as root or enable sudo."
+        return 1
+    fi
+    
+    # Initialize sudo keepalive if not already done
+    if [ "${SUDO_PRIVILEGES_INITIALIZED:-false}" != "true" ]; then
+        init_sudo_privileges
+        if [ $? -ne 0 ]; then
+            echo "ERROR: Failed to obtain required privileges."
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# Application info
+APP_NAME="Multi-Report-OMV"
+APP_VERSION=$(get_version 2>/dev/null || echo "Unknown Version")
+
+################################################################################
+# 5. HELP AND VERSION
+################################################################################
 
 show_version() {
     local simple=false
@@ -622,10 +652,14 @@ show_help() {
     echo "Usage: $(basename "$0") [command] [options]"
     echo ""
     echo "Commands:"
+    echo "  auto             Run all enabled plugins automatically"
     echo "  status           Show system status and SMART drives"
     echo "  test             Run drive self-tests"
     echo "  report           Generate comprehensive report"
     echo "  config           Manage configuration (show, backup, restore, list-backups, clean)"
+    echo ""
+    echo "Plugin Commands:"
+    echo "  (plugins will be listed here once installed)"
     echo ""
     echo "Installation Management:"
     echo "  --reinstall      Change installation type (system, user, or local)"
@@ -656,9 +690,9 @@ show_help() {
     echo "For more information, see: ${BASE_DIR}/docs/README.md"
 }
 
-# -------------------------------------------------------
-# INITIALIZATION
-# -------------------------------------------------------
+################################################################################
+# 6. APPLICATION COMMANDS
+################################################################################
 
 init_app() {
     log_info "Initializing $(get_full_version)"
@@ -678,16 +712,18 @@ init_app() {
         return 1
     fi
     
+    # Initialize plugin system
+    if ! init_plugins; then
+        log_error "Failed to initialize plugin system"
+        return 1
+    fi
+    
     # Export environment
     export_environment
     
     log_info "Initialization complete"
     return 0
 }
-
-# -------------------------------------------------------
-# COMMANDS
-# -------------------------------------------------------
 
 cmd_status() {
     log_info "Running status check"
@@ -721,6 +757,75 @@ cmd_report() {
     log_info "Generating report"
     echo "Report generation coming soon..."
     log_info "Report complete"
+}
+
+cmd_auto() {
+    log_info "Starting automated plugin execution"
+    
+    # Check initial drive power states
+    check_drive_power_states "Initial Drive Power States (before plugins)"
+    
+    local enabled_plugins=()
+    local has_error=0
+    local combined_summary=""
+    
+    # Get list of enabled plugins
+    for plugin in $(list_plugins); do
+        if is_plugin_enabled "$plugin"; then
+            enabled_plugins+=("$plugin")
+            log_info "Plugin enabled: $plugin"
+        else
+            log_debug "Plugin disabled: $plugin"
+        fi
+    done
+    
+    if [ ${#enabled_plugins[@]} -eq 0 ]; then
+        log_warning "No enabled plugins found"
+        echo "No plugins are enabled. Please enable plugins in configuration."
+        return 0
+    fi
+    
+    log_info "Will execute ${#enabled_plugins[@]} plugin(s): ${enabled_plugins[*]}"
+    
+    # Execute each enabled plugin
+    for plugin in "${enabled_plugins[@]}"; do
+        echo ""
+        echo "========================================" 
+        echo "Executing plugin: $plugin"
+        echo "========================================"
+        
+        if execute_plugin "$plugin"; then
+            log_info "Plugin succeeded: $plugin"
+        else
+            local exit_code=$?
+            log_error "Plugin failed: $plugin (exit code: $exit_code)"
+            has_error=1
+        fi
+        
+        # Check drive power states after each plugin
+        check_drive_power_states_info "Drive Power States After: $plugin"
+    done
+    
+    # Combine all plugin summaries
+    log_info "Combining plugin summaries"
+    combined_summary=$(combine_plugin_summaries)
+    
+    # Display combined summary
+    echo ""
+    echo "========================================"
+    echo "SUMMARY REPORT"
+    echo "========================================"
+    echo ""
+    echo "$combined_summary"
+    echo ""
+    
+    if [ $has_error -eq 0 ]; then
+        log_info "Automated execution completed successfully"
+        return 0
+    else
+        log_error "Automated execution completed with errors"
+        return 1
+    fi
 }
 
 cmd_config() {
@@ -838,9 +943,11 @@ show_config_help() {
     echo ""
 }
 
-# -------------------------------------------------------
-# CLEANUP
-# -------------------------------------------------------
+################################################################################
+# 7. PRIVILEGE MANAGEMENT
+################################################################################
+
+# (Sudo and cleanup functions will follow)
 
 cleanup() {
     log_debug "Starting cleanup"
@@ -856,10 +963,6 @@ cleanup() {
 
 # Register cleanup trap
 trap cleanup EXIT INT TERM
-
-# -------------------------------------------------------
-# SUDO PRIVILEGES MANAGEMENT
-# -------------------------------------------------------
 
 # Initialize sudo privileges and keep them alive
 init_sudo_privileges() {
@@ -935,9 +1038,9 @@ check_and_elevate() {
     init_sudo_privileges "$@"
 }
 
-# -------------------------------------------------------
-# MAIN
-# -------------------------------------------------------
+################################################################################
+# 8. MAIN ENTRY POINT
+################################################################################
 
 main() {
     # Handle special installation commands first (before initialization)
@@ -975,12 +1078,18 @@ main() {
                 config_file="$2"
                 shift 2
                 ;;
-            status|test|report|config)
+            auto|status|test|report|config)
                 command="$1"
                 shift
                 break
                 ;;
             *)
+                # Check if it's a plugin command
+                if [ -n "$1" ] && plugin_exists "$1" 2>/dev/null; then
+                    command="$1"
+                    shift
+                    break
+                fi
                 echo "Unknown option: $1"
                 echo "Use --help for usage information"
                 exit 1
@@ -1005,6 +1114,9 @@ main() {
     
     # Execute command
     case "${command:-status}" in
+        auto)
+            cmd_auto
+            ;;
         status)
             cmd_status
             ;;
@@ -1018,8 +1130,13 @@ main() {
             cmd_config "$@"
             ;;
         *)
-            log_error "Unknown command: $command"
-            exit 1
+            # Check if it's a plugin command
+            if plugin_exists "$command"; then
+                execute_plugin "$command" "$@"
+            else
+                log_error "Unknown command: $command"
+                exit 1
+            fi
             ;;
     esac
     
