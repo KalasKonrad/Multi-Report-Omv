@@ -448,8 +448,11 @@ collect_drive_data() {
         local serial=$(echo "$power_check_output" | grep -i "serial" | sed 's/.*Serial Number: *//;s/ *$//')
         if [ -z "$serial" ]; then
             # Try to get from cache/history without waking drive
-            serial=$(awk -F',' -v d="$drive_id" '$2==d {print $3; exit}' "$STATS_HISTORY_FILE" 2>/dev/null | head -1)
+            # Column 3 is Device ID, Column 11 is Serial Number
+            serial=$(awk -F',' -v d="$drive_id" '$3==d {print $11; exit}' "$STATS_HISTORY_FILE" 2>/dev/null | head -1)
         fi
+        
+        log_debug "  Serial number for $drive_id: ${serial:-NOT FOUND}"
         
         # Check if we should skip based on configuration
         if should_skip_sleeping_drive "$serial" "$power_mode"; then
