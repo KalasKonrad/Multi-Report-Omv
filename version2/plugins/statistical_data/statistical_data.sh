@@ -295,9 +295,17 @@ EOF
 
 # Initialize skip history file if it doesn't exist
 init_skip_history_file() {
+    log_debug "Checking skip history file: $STATS_SKIP_HISTORY_FILE"
     if [ ! -f "$STATS_SKIP_HISTORY_FILE" ]; then
         log_debug "Creating skip history file: $STATS_SKIP_HISTORY_FILE"
-        echo "timestamp,serial,drive_id,action,power_mode" > "$STATS_SKIP_HISTORY_FILE"
+        if echo "timestamp,serial,drive_id,action,power_mode" > "$STATS_SKIP_HISTORY_FILE" 2>&1; then
+            log_debug "Successfully created skip history file"
+        else
+            log_error "Failed to create skip history file: $STATS_SKIP_HISTORY_FILE"
+            return 1
+        fi
+    else
+        log_debug "Skip history file exists, size: $(stat -c%s "$STATS_SKIP_HISTORY_FILE" 2>/dev/null || echo 'unknown')"
     fi
 }
 
@@ -311,16 +319,28 @@ log_skip_event() {
     init_skip_history_file
     
     local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-    echo "$timestamp,$serial,$drive_id,$action,$power_mode" >> "$STATS_SKIP_HISTORY_FILE"
+    log_debug "  Attempting to log skip event to: $STATS_SKIP_HISTORY_FILE"
     
-    log_debug "  Logged skip event: $action for $drive_id ($power_mode)"
+    if echo "$timestamp,$serial,$drive_id,$action,$power_mode" >> "$STATS_SKIP_HISTORY_FILE" 2>&1; then
+        log_debug "  Logged skip event: $action for $drive_id ($power_mode)"
+    else
+        log_error "  Failed to append to skip history file: $STATS_SKIP_HISTORY_FILE"
+    fi
 }
 
 # Initialize skip counter file if it doesn't exist
 init_skip_counter_file() {
+    log_debug "Checking skip counter file: $STATS_SKIP_COUNTER_FILE"
     if [ ! -f "$STATS_SKIP_COUNTER_FILE" ]; then
         log_debug "Creating skip counter file: $STATS_SKIP_COUNTER_FILE"
-        echo "serial,skip_count" > "$STATS_SKIP_COUNTER_FILE"
+        if echo "serial,skip_count" > "$STATS_SKIP_COUNTER_FILE" 2>&1; then
+            log_debug "Successfully created skip counter file"
+        else
+            log_error "Failed to create skip counter file: $STATS_SKIP_COUNTER_FILE"
+            return 1
+        fi
+    else
+        log_debug "Skip counter file exists, size: $(stat -c%s "$STATS_SKIP_COUNTER_FILE" 2>/dev/null || echo 'unknown')"
     fi
 }
 
@@ -341,13 +361,25 @@ increment_skip_count() {
     local current=$(get_skip_count "$serial")
     local new_count=$((current + 1))
     
-    # Update or add entry
+    # Update or add entry - avoid sed -i which fails on network filesystems
+    local temp_file="${STATS_SKIP_COUNTER_FILE}.tmp.$$"
     if grep -q "^$serial," "$STATS_SKIP_COUNTER_FILE" 2>/dev/null; then
         # Update existing entry
-        sed -i "s/^$serial,.*/$serial,$new_count/" "$STATS_SKIP_COUNTER_FILE"
+        log_debug "Updating skip counter for $serial in file"
+        if awk -F',' -v s="$serial" -v c="$new_count" 'BEGIN{OFS=","} $1 == s {$2=c} {print}' "$STATS_SKIP_COUNTER_FILE" > "$temp_file" 2>&1 && mv "$temp_file" "$STATS_SKIP_COUNTER_FILE" 2>&1; then
+            log_debug "Successfully updated skip counter in file"
+        else
+            log_error "Failed to update skip counter for $serial in $STATS_SKIP_COUNTER_FILE"
+            rm -f "$temp_file" 2>/dev/null
+        fi
     else
         # Add new entry
-        echo "$serial,$new_count" >> "$STATS_SKIP_COUNTER_FILE"
+        log_debug "Adding new skip counter entry for $serial"
+        if echo "$serial,$new_count" >> "$STATS_SKIP_COUNTER_FILE" 2>&1; then
+            log_debug "Successfully added skip counter entry"
+        else
+            log_error "Failed to append skip counter for $serial to $STATS_SKIP_COUNTER_FILE"
+        fi
     fi
     
     log_debug "  Skip counter for $serial: $current -> $new_count"
@@ -360,8 +392,15 @@ reset_skip_count() {
     init_skip_counter_file
     
     if grep -q "^$serial," "$STATS_SKIP_COUNTER_FILE" 2>/dev/null; then
-        sed -i "s/^$serial,.*/$serial,0/" "$STATS_SKIP_COUNTER_FILE"
-        log_debug "  Reset skip counter for $serial to 0"
+        # Avoid sed -i which fails on network filesystems
+        local temp_file="${STATS_SKIP_COUNTER_FILE}.tmp.$$"
+        log_debug "Resetting skip counter for $serial in file"
+        if awk -F',' -v s="$serial" 'BEGIN{OFS=","} $1 == s {$2=0} {print}' "$STATS_SKIP_COUNTER_FILE" > "$temp_file" 2>&1 && mv "$temp_file" "$STATS_SKIP_COUNTER_FILE" 2>&1; then
+            log_debug "  Reset skip counter for $serial to 0"
+        else
+            log_error "Failed to reset skip counter for $serial in $STATS_SKIP_COUNTER_FILE"
+            rm -f "$temp_file" 2>/dev/null
+        fi
     fi
 }
 
