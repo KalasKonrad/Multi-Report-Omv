@@ -930,20 +930,20 @@ EOF
             TEMP)
                 cat << EOF
 🌡️  Temperature Statistics:
-   Current:  ${field1}°C
-   Minimum:  ${field2}°C
-   Maximum:  ${field3}°C
-   Average:  ${field4}°C
+   Current Temperature:    ${field1}°C
+   Minimum Temperature:    ${field2}°C
+   Maximum Temperature:    ${field3}°C
+   Average Temperature:    ${field4}°C
 
 EOF
                 ;;
             WORKLOAD)
                 cat << EOF
 💾 Workload During Period:
-   Power Hours:  ${field1}h
-   Data Written: $field2
-   Data Read:    $field3
-   Total Hours:  ${field4}h (${field5} years)
+   Power Hours (Period):   ${field1}h
+   Data Written:           $field2
+   Data Read:              $field3
+   Total Power Hours:      ${field4}h (${field5} years)
 
 EOF
                 ;;
@@ -951,42 +951,42 @@ EOF
                 echo "⚠️  Health & Errors:"
                 # Reallocated Sectors
                 if [ "$field1" -gt 0 ]; then
-                    echo "   Reallocated Sectors: $field2 new ($field1 total)"
+                    echo "   Reallocated Sectors:    $field2 new ($field1 total)"
                 else
-                    echo "   Reallocated Sectors: $field2 new"
+                    echo "   Reallocated Sectors:    $field2 new"
                 fi
                 # Pending Sectors (current state, not accumulated)
-                echo "   Pending Sectors:     $field3"
+                echo "   Pending Sectors:        $field3"
                 # Uncorrectable (current state)
-                echo "   Uncorrectable:       $field4"
+                echo "   Uncorrectable Errors:   $field4"
                 # CRC Errors
                 if [ "$field5" -gt 0 ]; then
-                    echo "   CRC Errors:          $field6 new ($field5 total)"
+                    echo "   CRC Errors:             $field6 new ($field5 total)"
                 else
-                    echo "   CRC Errors:          $field6 new"
+                    echo "   CRC Errors:             $field6 new"
                 fi
                 # Read Errors
                 if [ "$field7" -gt 0 ]; then
-                    echo "   Read Errors:         $field8 new ($field7 total)"
+                    echo "   Read Errors:            $field8 new ($field7 total)"
                 else
-                    echo "   Read Errors:         $field8 new"
+                    echo "   Read Errors:            $field8 new"
                 fi
                 # Write Errors
                 if [ "$field9" -gt 0 ]; then
-                    echo "   Write Errors:        ${field10} new ($field9 total)"
+                    echo "   Write Errors:           ${field10} new ($field9 total)"
                 else
-                    echo "   Write Errors:        ${field10} new"
+                    echo "   Write Errors:           ${field10} new"
                 fi
                 echo ""
                 ;;
             SPECIAL)
                 if [ -n "$field1" ] || [ -n "$field2" ] || [ -n "$field3" ]; then
                     echo "📌 Drive-Specific:"
-                    [ -n "$field1" ] && echo "   Helium Level:    ${field1}%"
-                    [ -n "$field2" ] && echo "   Wear Level:      ${field2}%"
+                    [ -n "$field1" ] && echo "   Helium Level:           ${field1}%"
+                    [ -n "$field2" ] && echo "   Wear Level:             ${field2}%"
                     # Only show SMR status if drive is actually SMR (not N/A or empty)
                     if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ]; then
-                        echo "   ⚠️  SMR Drive:   $field3"
+                        echo "   ⚠️  SMR Drive:           $field3"
                     fi
                     echo ""
                 fi
@@ -995,7 +995,7 @@ EOF
                 # Show skip counter if configured with "counted" mode
                 if [ "${CONFIG[STATS_SKIP_SLEEPING_DRIVES]}" = "counted" ]; then
                     echo "💤 Sleep Protection:"
-                    echo "   Current Skip Counter: $field1 / ${CONFIG[STATS_SKIP_MAX_COUNT]:-10}"
+                    echo "   Skip Counter:           $field1 / ${CONFIG[STATS_SKIP_MAX_COUNT]:-10}"
                     local total_attempts=$((field2 + field3))
                     if [ "$total_attempts" -gt 0 ]; then
                         echo "   During Report Period:"
@@ -1162,6 +1162,7 @@ generate_html_report() {
         .stat-row {
             display: flex;
             justify-content: space-between;
+            gap: 20px;
             padding: 8px 10px;
             border-bottom: 1px solid #e9ecef;
         }
@@ -1170,6 +1171,7 @@ generate_html_report() {
         }
         .stat-label {
             color: #6c757d;
+            margin-right: 15px;
         }
         .stat-label::after {
             content: ": ";
