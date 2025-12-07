@@ -536,14 +536,23 @@ get_skip_stats() {
     
     if [ -f "$skip_history_file" ]; then
         # Count skipped events in period
+        # Extract just the date portion from timestamp (field 1) for comparison
         times_skipped=$(awk -F',' -v s="$drive_serial" -v start="$start_date" -v end="$end_date" '
-            $2 == s && $1 >= start && $1 <= end && $4 == "skipped" {count++}
+            {
+                split($1, dt, " ");
+                date = dt[1];
+            }
+            $2 == s && date >= start && date <= end && $4 == "skipped" {count++}
             END {print count+0}
         ' "$skip_history_file")
         
         # Count collected events in period
         times_collected=$(awk -F',' -v s="$drive_serial" -v start="$start_date" -v end="$end_date" '
-            $2 == s && $1 >= start && $1 <= end && $4 == "collected" {count++}
+            {
+                split($1, dt, " ");
+                date = dt[1];
+            }
+            $2 == s && date >= start && date <= end && $4 == "collected" {count++}
             END {print count+0}
         ' "$skip_history_file")
     fi
