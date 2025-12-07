@@ -999,12 +999,21 @@ EOF
                 echo ""
                 ;;
             SPECIAL)
-                if [ -n "$field1" ] || [ -n "$field2" ] || [ -n "$field3" ]; then
+                # Check if we have any special metrics to display
+                local has_special_data=false
+                [ -n "$field1" ] && has_special_data=true
+                [ -n "$field2" ] && has_special_data=true
+                # Only count SMR as special data if it's actually SMR (not CMR/N/A/Unknown)
+                if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ] && [ "$field3" != "CMR" ]; then
+                    has_special_data=true
+                fi
+                
+                if [ "$has_special_data" = "true" ]; then
                     echo "📌 Drive-Specific:"
                     [ -n "$field1" ] && echo "   Helium Level:           ${field1}%"
                     [ -n "$field2" ] && echo "   Wear Level:             ${field2}%"
-                    # Only show SMR status if drive is actually SMR (not N/A or empty)
-                    if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ]; then
+                    # Only show SMR warning if drive is actually SMR
+                    if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ] && [ "$field3" != "CMR" ]; then
                         echo "   ⚠️  SMR Drive:           $field3"
                     fi
                     echo ""
@@ -1401,7 +1410,8 @@ EOF
                 local has_content=false
                 [ -n "$field1" ] && has_content=true
                 [ -n "$field2" ] && has_content=true
-                if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ]; then
+                # Only count SMR as content if it's actually SMR (not CMR/N/A/Unknown)
+                if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ] && [ "$field3" != "CMR" ]; then
                     has_content=true
                 fi
                 
@@ -1422,8 +1432,8 @@ EOF
                 <span class="stat-value">${field2}%</span>
             </div>
 EOF
-                    # Only show SMR if drive is actually SMR
-                    if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ]; then
+                    # Only show SMR warning if drive is actually SMR (not CMR/N/A/Unknown)
+                    if [ -n "$field3" ] && [ "$field3" != "N/A" ] && [ "$field3" != "Unknown" ] && [ "$field3" != "CMR" ]; then
                         cat << EOF
             <div class="stat-row">
                 <span class="stat-label">⚠️ SMR Drive</span>
