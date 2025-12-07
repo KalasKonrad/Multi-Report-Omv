@@ -696,6 +696,13 @@ show_help() {
 ################################################################################
 
 init_app() {
+    # Change to script directory to ensure relative paths work correctly
+    cd "$BASE_DIR" || {
+        log_error "Failed to change to base directory: $BASE_DIR"
+        return 1
+    }
+    log_debug "Working directory set to: $BASE_DIR"
+    
     log_info "Initializing $(get_full_version)"
     
     # Load configuration
