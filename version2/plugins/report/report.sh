@@ -533,6 +533,7 @@ get_skip_stats() {
     # Get skip/collect counts during report period
     local times_skipped=0
     local times_collected=0
+    local times_woken=0
     
     if [ -f "$skip_history_file" ]; then
         # Count skipped events in period
@@ -546,8 +547,18 @@ get_skip_stats() {
             END {print count+0}
         ' "$skip_history_file")
         
-        # Count collected events in period
+        # Count collected events in period (both "collected" from sleep and "active")
         times_collected=$(awk -F',' -v s="$drive_serial" -v start="$start_date" -v end="$end_date" '
+            {
+                split($1, dt, " ");
+                date = dt[1];
+            }
+            $2 == s && date >= start && date <= end && ($4 == "collected" || $4 == "active") {count++}
+            END {print count+0}
+        ' "$skip_history_file")
+        
+        # Count times woken from sleep (subset of collected - only "collected" events, not "active")
+        times_woken=$(awk -F',' -v s="$drive_serial" -v start="$start_date" -v end="$end_date" '
             {
                 split($1, dt, " ");
                 date = dt[1];
@@ -557,8 +568,8 @@ get_skip_stats() {
         ' "$skip_history_file")
     fi
     
-    # Return: current_count|times_skipped|times_collected
-    echo "$current_skip_count|$times_skipped|$times_collected"
+    # Return: current_count|times_skipped|times_collected|times_woken
+    echo "$current_skip_count|$times_skipped|$times_collected|$times_woken"
 }
 
 # ============================================================================
@@ -821,6 +832,7 @@ generate_report() {
         local skip_current=$(echo "$skip_stats" | cut -d'|' -f1)
         local skip_times_skipped=$(echo "$skip_stats" | cut -d'|' -f2)
         local skip_times_collected=$(echo "$skip_stats" | cut -d'|' -f3)
+        local skip_times_woken=$(echo "$skip_stats" | cut -d'|' -f4)
         
         # Check for alerts
         local alerts=$(check_drive_alerts "$drive" "$temp_max" "$realloc_total" "$realloc_new" "$pending" "$crc_total" "$crc_new" "$read_total" "$read_new" "$write_total" "$write_new" "$smart_status" "$smr_status")
@@ -835,7 +847,7 @@ generate_report() {
         report_data="${report_data}WORKLOAD|${power_delta}|${data_written}|${data_read}|${power_hours}|${drive_age}\n"
         report_data="${report_data}ERRORS|${realloc_total}|${realloc_new}|${pending}|${uncorrectable}|${crc_total}|${crc_new}|${read_total}|${read_new}|${write_total}|${write_new}\n"
         report_data="${report_data}SPECIAL|${helium}|${wear}|${smr_status}\n"
-        report_data="${report_data}SKIPCOUNT|${skip_current}|${skip_times_skipped}|${skip_times_collected}\n"
+        report_data="${report_data}SKIPCOUNT|${skip_current}|${skip_times_skipped}|${skip_times_collected}|${skip_times_woken}\n"
         report_data="${report_data}---\n"
     done
     
@@ -1038,6 +1050,9 @@ EOF
                         echo "   During Report Period:"
                         echo "     Times Skipped:   $field2"
                         echo "     Times Collected: $field3"
+                        if [ "$field4" -gt 0 ]; then
+                            echo "     Times Woken Up:  $field4"
+                        fi
                         echo "     Total Attempts:  $total_attempts"
                         local collection_rate=$((field3 * 100 / total_attempts))
                         echo "     Collection Rate: ${collection_rate}%"
@@ -1479,6 +1494,17 @@ EOF
                 <span class="stat-label">Times Collected (Period)</span>
                 <span class="stat-value">$field3</span>
             </div>
+EOF
+                        # Only show "Times Woken Up" if there were any
+                        if [ "$field4" -gt 0 ]; then
+                            cat << EOF
+            <div class="stat-row">
+                <span class="stat-label">Times Woken Up (Period)</span>
+                <span class="stat-value">$field4</span>
+            </div>
+EOF
+                        fi
+                        cat << EOF
             <div class="stat-row">
                 <span class="stat-label">Collection Rate</span>
                 <span class="stat-value">${collection_rate}%</span>

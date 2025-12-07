@@ -924,6 +924,15 @@ collect_drive_data() {
     
     if [ $raw_write_status -eq 0 ]; then
         log_info "✓ Data collected for $drive_id ($model, $smart_status)"
+        
+        # Log collection event for all drives (active or woken from sleep)
+        # This was already logged for sleeping drives that were woken up,
+        # but not for drives that were already active
+        if [[ ! "$power_mode" =~ STANDBY|SLEEP|IDLE_B|IDLE_C|LOW_POWER ]]; then
+            # Drive was already active, log as "active" collection
+            log_skip_event "$serial" "$drive_id" "active" "$power_mode"
+        fi
+        
         return 0
     else
         log_error "Failed to write statistical data for $drive_id"
