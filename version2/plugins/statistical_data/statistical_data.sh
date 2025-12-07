@@ -583,8 +583,20 @@ collect_drive_data() {
             g_sense=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==191) | .raw.value' 2>/dev/null)
             high_fly=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==189) | .raw.value' 2>/dev/null)
             
-            # Helium level for helium-filled drives
+            # Helium level for helium-filled drives (different vendors use different attributes)
+            # ID 22: Standard helium level (WD, some Seagate)
+            # ID 23: Helium_Condition_Lower (Toshiba)
+            # ID 24: Helium_Condition_Upper (Toshiba)
             helium_level=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==22) | .value' 2>/dev/null)
+            if [ -z "$helium_level" ] || [ "$helium_level" = "null" ]; then
+                # Try Toshiba helium attributes (23 and 24) - use the lower value as indicator
+                local helium_lower=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==23) | .value' 2>/dev/null)
+                local helium_upper=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==24) | .value' 2>/dev/null)
+                if [ -n "$helium_lower" ] && [ "$helium_lower" != "null" ] && [ -n "$helium_upper" ] && [ "$helium_upper" != "null" ]; then
+                    # Use the minimum of the two values as the helium condition
+                    helium_level=$(( helium_lower < helium_upper ? helium_lower : helium_upper ))
+                fi
+            fi
             
             # For seek_error and read_error, use the string value (first part before space)
             seek_error=$(echo "$smartctl_json" | jq -r '.ata_smart_attributes.table[] | select(.id==7) | .raw.string' 2>/dev/null | awk '{print $1}')
