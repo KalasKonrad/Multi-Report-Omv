@@ -1037,10 +1037,6 @@ generate_html_report() {
     local alert_data="$8"
     local report_data="$9"
     
-    log_debug "    HTML: report_name=$report_name"
-    log_debug "    HTML: date range=$start_date to $end_date"
-    log_debug "    HTML: period_days=$period_days, drives=$drive_count, datapoints=$datapoint_count, alerts=$alert_count"
-    
     cat << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="en">
