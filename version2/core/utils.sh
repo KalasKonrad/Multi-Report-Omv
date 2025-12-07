@@ -874,6 +874,13 @@ get_drive_filesystem_info() {
 check_drive_recording_type() {
     local drive="$1"
     
+    # Check if drive is an SSD first - SMR/CMR only applies to HDDs
+    local drive_type=$(get_drive_type "$drive")
+    if [ "$drive_type" = "SSD" ] || [ "$drive_type" = "NVMe" ]; then
+        echo "N/A"
+        return
+    fi
+    
     # Method 0: Check SMR cache first (fastest - from smr_check plugin)
     local cache_file="${CONFIG[SMR_CACHE_FILE]:-${BASE_DIR}/data/smr_check/drive_types.cache}"
     if [ -f "$cache_file" ]; then
