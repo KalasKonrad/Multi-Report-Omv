@@ -1163,7 +1163,7 @@ generate_html_report() {
             display: flex;
             justify-content: space-between;
             gap: 20px;
-            padding: 8px 10px;
+            padding: 4px 10px;
             border-bottom: 1px solid #e9ecef;
         }
         .stat-row:last-child {
