@@ -347,7 +347,7 @@ init_skip_counter_file() {
 # Get current skip count for a drive
 get_skip_count() {
     local serial="$1"
-    init_skip_counter_file
+    init_skip_counter_file >&2
     
     local count=$(awk -F',' -v s="$serial" '$1 == s {print $2; exit}' "$STATS_SKIP_COUNTER_FILE")
     echo "${count:-0}"
@@ -356,7 +356,7 @@ get_skip_count() {
 # Increment skip count for a drive
 increment_skip_count() {
     local serial="$1"
-    init_skip_counter_file
+    init_skip_counter_file >&2
     
     local current=$(get_skip_count "$serial")
     local new_count=$((current + 1))
@@ -389,7 +389,7 @@ increment_skip_count() {
 # Reset skip count for a drive
 reset_skip_count() {
     local serial="$1"
-    init_skip_counter_file
+    init_skip_counter_file >&2
     
     if grep -q "^$serial," "$STATS_SKIP_COUNTER_FILE" 2>/dev/null; then
         # Avoid sed -i which fails on network filesystems
