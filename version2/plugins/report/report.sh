@@ -449,14 +449,25 @@ calc_error_stats() {
 get_drive_info() {
     local latest_data="$1"
     
-    # Columns: 5=model, 6=mountpoint, 7=fs_name, 10=drive_type, 12=smart_status, 20=power_hours, 50=smr_status
+    # Columns: 4=capacity, 5=model, 6=mountpoint, 7=fs_name, 8=fs_type, 9=omv_tag, 10=drive_type, 11=serial, 12=smart_status, 20=power_hours, 50=smr_status
+    local capacity=$(echo "$latest_data" | cut -d',' -f4)
     local model=$(echo "$latest_data" | cut -d',' -f5)
     local mountpoint=$(echo "$latest_data" | cut -d',' -f6)
     local fs_name=$(echo "$latest_data" | cut -d',' -f7)
+    local fs_type=$(echo "$latest_data" | cut -d',' -f8)
+    local omv_tag=$(echo "$latest_data" | cut -d',' -f9)
+    local drive_type=$(echo "$latest_data" | cut -d',' -f10)
+    local serial=$(echo "$latest_data" | cut -d',' -f11)
     local smart_status=$(echo "$latest_data" | cut -d',' -f12)
     local power_hours=$(echo "$latest_data" | cut -d',' -f20)
     local smr_status=$(echo "$latest_data" | cut -d',' -f50)
-    local drive_type=$(echo "$latest_data" | cut -d',' -f10)
+    
+    # Clean up N/A values for display
+    [ "$mountpoint" = "N/A" ] && mountpoint="-"
+    [ "$fs_type" = "N/A" ] && fs_type="-"
+    [ "$omv_tag" = "N/A" ] && omv_tag="-"
+    [ "$serial" = "N/A" ] && serial="-"
+    [ "$capacity" = "N/A" ] && capacity="-"
     
     # Calculate drive age in years, months, days
     local drive_age="0y 0m 0d"
@@ -464,7 +475,7 @@ get_drive_info() {
         drive_age=$(format_hours_to_age "$power_hours")
     fi
     
-    echo "$model|$mountpoint|$fs_name|$smart_status|$power_hours|$drive_age|$smr_status|$drive_type"
+    echo "$model|$mountpoint|$fs_name|$fs_type|$omv_tag|$smart_status|$power_hours|$drive_age|$smr_status|$drive_type|$serial|$capacity"
 }
 
 # Format hours into years, months, days
@@ -782,11 +793,15 @@ generate_report() {
         local model=$(echo "$drive_info" | cut -d'|' -f1)
         local mountpoint=$(echo "$drive_info" | cut -d'|' -f2)
         local fs_name=$(echo "$drive_info" | cut -d'|' -f3)
-        local smart_status=$(echo "$drive_info" | cut -d'|' -f4)
-        local power_hours=$(echo "$drive_info" | cut -d'|' -f5)
-        local drive_age=$(echo "$drive_info" | cut -d'|' -f6)
-        local smr_status=$(echo "$drive_info" | cut -d'|' -f7)
-        local drive_type=$(echo "$drive_info" | cut -d'|' -f8)
+        local fs_type=$(echo "$drive_info" | cut -d'|' -f4)
+        local omv_tag=$(echo "$drive_info" | cut -d'|' -f5)
+        local smart_status=$(echo "$drive_info" | cut -d'|' -f6)
+        local power_hours=$(echo "$drive_info" | cut -d'|' -f7)
+        local drive_age=$(echo "$drive_info" | cut -d'|' -f8)
+        local smr_status=$(echo "$drive_info" | cut -d'|' -f9)
+        local drive_type=$(echo "$drive_info" | cut -d'|' -f10)
+        local serial=$(echo "$drive_info" | cut -d'|' -f11)
+        local capacity=$(echo "$drive_info" | cut -d'|' -f12)
         
         local helium=$(echo "$special_stats" | cut -d'|' -f1)
         local wear=$(echo "$special_stats" | cut -d'|' -f2)
@@ -806,7 +821,7 @@ generate_report() {
         fi
         
         # Store drive data (pipe-delimited for easy parsing in template)
-        report_data="${report_data}DRIVE|${drive}|${model}|${fs_name}|${smart_status}|${drive_type}\n"
+        report_data="${report_data}DRIVE|${drive}|${model}|${fs_name}|${smart_status}|${drive_type}|${mountpoint}|${fs_type}|${omv_tag}|${serial}|${capacity}\n"
         report_data="${report_data}TEMP|${temp_current}|${temp_min}|${temp_max}|${temp_avg}\n"
         report_data="${report_data}WORKLOAD|${power_delta}|${data_written}|${data_read}|${power_hours}|${drive_age}\n"
         report_data="${report_data}ERRORS|${realloc_total}|${realloc_new}|${pending}|${uncorrectable}|${crc_total}|${crc_new}|${read_total}|${read_new}|${write_total}|${write_new}\n"
@@ -918,11 +933,15 @@ EOF
                 cat << EOF
 
 ────────────────────────────────────────────────────────────────────────────────
-Drive ID:     $field1
-Model:        $field2
-Filesystem:   $field3
-SMART Status: $field4
-Drive Type:   $field5
+Drive ID:         $field1
+Model:            $field2
+Serial Number:    ${field9}
+Capacity:         ${field10}
+Drive Type:       $field5
+Filesystem:       $field3 ($field7)
+Mountpoint:       $field6
+OMV Tag:          $field8
+SMART Status:     $field4
 ────────────────────────────────────────────────────────────────────────────────
 
 EOF
@@ -1270,9 +1289,13 @@ EOF
             <h3>$field1 - $field2</h3>
         </div>
         <div class="drive-info">
-            <div><strong>Filesystem:</strong> $field3</div>
-            <div><strong>SMART Status:</strong> <span class="$status_class">$field4</span></div>
+            <div><strong>Serial Number:</strong> ${field9}</div>
+            <div><strong>Capacity:</strong> ${field10}</div>
             <div><strong>Drive Type:</strong> $field5</div>
+            <div><strong>SMART Status:</strong> <span class="$status_class">$field4</span></div>
+            <div><strong>Filesystem:</strong> $field3 ($field7)</div>
+            <div><strong>Mountpoint:</strong> $field6</div>
+            <div><strong>OMV Tag:</strong> $field8</div>
         </div>
 EOF
                 ;;
