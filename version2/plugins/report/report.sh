@@ -850,8 +850,8 @@ generate_report() {
     
     log_info "Report saved to: $report_file"
     
-    # Send email
-    send_report_email "$report_name" "$report_file"
+    # Send email (pass alert count for proper severity detection)
+    send_report_email "$report_name" "$report_file" "$total_alerts"
     
     return 0
 }
@@ -1474,6 +1474,7 @@ EOF
 send_report_email() {
     local report_name="$1"
     local report_file="$2"
+    local alert_count="${3:-0}"
     
     log_debug "  Email function called"
     log_debug "    Report name: $report_name"
@@ -1494,9 +1495,9 @@ send_report_email() {
     
     # Use notification system if available
     if type send_report_notification &>/dev/null; then
-        # Detect if report has errors (check for ERROR, CRITICAL, FAIL patterns)
+        # Determine if report has errors based on actual alert count
         local has_errors="false"
-        if grep -qi "ERROR\|CRITICAL\|FAIL" "$report_file" 2>/dev/null; then
+        if [ "$alert_count" -gt 0 ]; then
             has_errors="true"
         fi
         
